@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { BillingSection } from "@/components/project/billing-section";
 import { InfraSection } from "@/components/project/infra-section";
+import { PortalSection } from "@/components/project/portal-section";
 import { ProjectHeader } from "@/components/project/project-header";
 import { getProjectBilling } from "@/server/billing/queries";
 import { getProject } from "@/server/projects/queries";
@@ -28,7 +29,9 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
         plans={plans}
       />
       <InfraSection projectId={project.id} assets={project.assets} />
-      {/* PortalSection (Task 15) */}
+      <PortalSection projectId={project.id} 
+        tokens={project.tokens.map((t) => ({ id: t.id, createdAt: t.createdAt, lastViewedAt: t.lastViewedAt }))}
+      />
     </div>
   );
 }
