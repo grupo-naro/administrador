@@ -131,6 +131,13 @@ ID del túnel y la ruta del JSON de credenciales:
 - `AUTH_SECRET` de producción distinto al de desarrollo; `AUTH_URL` y `APP_URL` con la URL pública `https`; `AUTH_TRUST_HOST=true`.
 - Cambiar la contraseña de administrador de ejemplo (ver punto 2). No versionar `.env` ni `.env.production`.
 - En producción usar siempre `prisma migrate deploy`, nunca `migrate dev`.
+- **Límite de intentos de login**: la app limita el formulario de `/login` a 10 intentos cada 15 minutos por IP. Ese
+  límite vive **en memoria y por proceso** (se reinicia con `pm2 restart` y no se comparte entre instancias), y no cubre
+  un POST directo a `/api/auth/callback/credentials`. Como defensa en profundidad, crear en Cloudflare
+  (Security → WAF → Rate limiting rules) una regla como:
+  - Expresión: `(http.request.method eq "POST" and (starts_with(http.request.uri.path, "/login") or starts_with(http.request.uri.path, "/api/auth")))`
+  - Contar por IP; umbral 10 solicitudes cada 1 minuto (o el más estricto que permita el plan); acción **Block**
+    (o Managed Challenge) durante 10 minutos.
 
 ## 6. Respaldos diarios
 

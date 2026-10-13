@@ -1,6 +1,7 @@
 // Validación liviana del portal, usada desde src/proxy.ts (no lleva "server-only" porque el bundle
 // del proxy no resuelve la condición react-server). Decide el 404 antes de que empiece el streaming.
 import { prisma } from "@/lib/prisma";
+import { clientIp } from "@/lib/client-ip";
 import { createRateLimiter } from "@/lib/rate-limit";
 import { evaluateToken, hashToken, isWellFormedToken } from "@/lib/tokens";
 
@@ -8,9 +9,7 @@ export const PORTAL_PREFIX = "/client/view/";
 
 const allow = createRateLimiter({ limit: 30, windowMs: 60_000 });
 
-export function clientIp(headers: Headers): string {
-  return headers.get("cf-connecting-ip") ?? headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-}
+export { clientIp };
 
 /** true si la request puede seguir a la página; false => 404 genérico (rate limit o token inválido). */
 export async function portalRequestAllowed(pathname: string, headers: Headers): Promise<boolean> {
