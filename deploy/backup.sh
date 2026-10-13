@@ -8,5 +8,5 @@ mkdir -p "$DIR"
 FILE="$DIR/grupo_naro_$(date +%Y%m%d_%H%M).dump"
 trap 'rm -f "$FILE"' ERR
 pg_dump -U postgres -h localhost -Fc -f "$FILE" "$DB"
-[ -s "$FILE" ] || { echo "El respaldo quedó vacío: $FILE" >&2; exit 1; }
+[ -s "$FILE" ] || { echo "El respaldo quedó vacío: $FILE" >&2; rm -f "$FILE"; exit 1; }
 find "$DIR" -name 'grupo_naro_*.dump' -mtime +30 -delete

@@ -8,6 +8,7 @@ import { requireAdmin } from "@/lib/auth-guard";
 import { fail, money, optDateField, optMoney, optText, parseForm, text, type ActionState } from "@/lib/form";
 import { centsToDec } from "@/server/mappers";
 import { createProjectRecord, validateNewProject } from "@/server/projects/create";
+import { isUniqueViolation } from "@/lib/prisma-errors";
 
 const proposalSchema = z.object({
   clientId: text("Elegí un cliente"),
@@ -74,10 +75,16 @@ export async function acceptProposal(id: string, _prev: ActionState, fd: FormDat
   };
   const problem = validateNewProject(input);
   if (problem) return fail(problem);
-  const project = await prisma.$transaction(async (tx) => {
-    await tx.proposal.update({ where: { id }, data: { status: "ACEPTADA", acceptedModel: d.model } });
-    return createProjectRecord(tx, input);
-  });
+  let project: { id: string };
+  try {
+    project = await prisma.$transaction(async (tx) => {
+      await tx.proposal.update({ where: { id }, data: { status: "ACEPTADA", acceptedModel: d.model } });
+      return createProjectRecord(tx, input);
+    });
+  } catch (e) {
+    if (isUniqueViolation(e)) return fail("La propuesta ya fue aceptada");
+    throw e;
+  }
   revalidatePath("/proposals");
   revalidatePath("/projects");
   redirect(`/projects/${project.id}`);

@@ -32,11 +32,17 @@ const centsOrNull = (v: string): number | null => {
   }
 };
 
+/** Máximo representable en Decimal(14,2): 999.999.999.999,99 ARS. */
+export const MAX_MONEY_CENTS = 99_999_999_999_999;
+const TOO_BIG = "Monto demasiado grande";
+const withinMax = (v: string) => (centsOrNull(v) ?? 0) <= MAX_MONEY_CENTS;
+
 export const money = (msg = "Monto inválido") =>
   z
     .string()
     .trim()
     .refine((v) => centsOrNull(v) !== null, msg)
+    .refine(withinMax, TOO_BIG)
     .transform((v) => centsOrNull(v) as number);
 
 export const optMoney = z
@@ -44,6 +50,7 @@ export const optMoney = z
   .trim()
   .optional()
   .refine((v) => !v || centsOrNull(v) !== null, "Monto inválido")
+  .refine((v) => !v || withinMax(v), TOO_BIG)
   .transform((v) => (v ? (centsOrNull(v) as number) : undefined));
 
 const dateOrNull = (v: string): Date | null => {

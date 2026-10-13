@@ -6,6 +6,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-guard";
 import { fail, optText, parseForm, text, type ActionState } from "@/lib/form";
+import { isRecordNotFound } from "@/lib/prisma-errors";
 
 const schema = z.object({
   name: text("El nombre es obligatorio"),
@@ -29,7 +30,12 @@ export async function updateClient(id: string, _prev: ActionState, fd: FormData)
   await requireAdmin();
   const parsed = parseForm(schema, fd);
   if (!parsed.ok) return fail(parsed.error);
-  await prisma.client.update({ where: { id }, data: parsed.data });
+  try {
+    await prisma.client.update({ where: { id }, data: parsed.data });
+  } catch (e) {
+    if (isRecordNotFound(e)) return fail("Cliente no encontrado");
+    throw e;
+  }
   revalidatePath("/clients");
   revalidatePath(`/clients/${id}`);
   return { message: "Cambios guardados" };

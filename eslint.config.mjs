@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Scripts de despliegue (CommonJS de pm2), fuera del bundle de la app.
+    "deploy/**",
   ]),
 ]);
 
