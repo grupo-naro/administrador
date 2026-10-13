@@ -23,6 +23,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
           monthlyFeeCents: project.monthlyFeeCents,
           firstPaymentCents: project.firstPaymentCents,
           maintenanceActive: plans.some((p) => p.kind === "MANTENIMIENTO") && !project.maintenanceEndedAt,
+          maintenanceEnded: plans.some((p) => p.kind === "MANTENIMIENTO") && !!project.maintenanceEndedAt,
           maintenanceFeeCents: project.maintenanceFeeCents,
           serviceSuspended: project.serviceSuspended,
         }}

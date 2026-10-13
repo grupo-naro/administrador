@@ -1,7 +1,7 @@
 import { ActionForm } from "@/components/action-form";
-import { Field, SelectField } from "@/components/fields";
+import { ConfirmCheckbox, Field, SelectField } from "@/components/fields";
 import { toDateInput, todayAR, formatDate } from "@/domain/dates";
-import { needsExtension } from "@/domain/installments";
+import { BATCH_SIZE, needsExtension } from "@/domain/installments";
 import { installmentLabel } from "@/domain/labels";
 import { formatARS } from "@/domain/money";
 import { PAYMENT_METHODS, PLAN_LABEL, STATUS_CLASS, STATUS_LABEL } from "@/lib/labels";
@@ -28,6 +28,8 @@ export interface BillingProject {
   monthlyFeeCents: number | null;
   firstPaymentCents: number | null;
   maintenanceActive: boolean;
+  /** Hay plan de mantenimiento pero está dado de baja (se puede reanudar). */
+  maintenanceEnded: boolean;
   maintenanceFeeCents: number | null;
   serviceSuspended: boolean;
 }
@@ -47,12 +49,17 @@ function InstallmentRowView({ i }: { i: InstallmentRow }) {
       </td>
       <td className="space-y-2 p-2">
         {i.payments.map((p) => (
-          <div key={p.id} className="flex items-center justify-between gap-2 text-xs">
+          <div key={p.id} className="space-y-1 text-xs">
             <span>
               {formatDate(p.paidAt)} · {formatARS(p.amountCents)} · {p.method}
               {p.receiptNote ? ` · ${p.receiptNote}` : ""}
             </span>
-            <ActionForm action={deletePayment.bind(null, p.id)} submitLabel="Quitar" variant="outline" className="shrink-0" />
+            <details>
+              <summary className="cursor-pointer underline">Quitar pago</summary>
+              <ActionForm action={deletePayment.bind(null, p.id)} submitLabel="Quitar" variant="outline" className="mt-1 space-y-2">
+                <ConfirmCheckbox warning="Se eliminará este pago y el saldo de la cuota volverá a quedar pendiente por ese monto." />
+              </ActionForm>
+            </details>
           </div>
         ))}
         {remaining > 0 && (
@@ -147,7 +154,26 @@ export function BillingSection({ project, plans }: { project: BillingProject; pl
               </tbody>
             </table>
           </div>
-          {plan.kind !== "DESARROLLO" && (
+          {plan.kind === "MANTENIMIENTO" && project.maintenanceEnded && (
+            <div className="max-w-md space-y-2 rounded-md border p-4">
+              <h3 className="font-medium">Reanudar mantenimiento</h3>
+              <p className="text-xs text-muted-foreground">
+                Se generan {BATCH_SIZE} cuotas nuevas desde el próximo vencimiento, en el mismo día del mes que el plan original. Los
+                meses en pausa no se cobran.
+              </p>
+              <ActionForm action={activateMaintenance.bind(null, project.id)} submitLabel="Reanudar mantenimiento">
+                <Field
+                  label="Abono mensual (ARS)"
+                  name="fee"
+                  type="number"
+                  step="0.01"
+                  defaultValue={centsToInput(project.maintenanceFeeCents)}
+                  required
+                />
+              </ActionForm>
+            </div>
+          )}
+          {plan.kind !== "DESARROLLO" && !(plan.kind === "MANTENIMIENTO" && project.maintenanceEnded) && (
             <div className="grid gap-4 md:grid-cols-2">
               <details className="rounded-md border p-3">
                 <summary className="cursor-pointer text-sm font-medium">Actualizar abono (inflación)</summary>
@@ -185,7 +211,7 @@ export function BillingSection({ project, plans }: { project: BillingProject; pl
         />
       )}
 
-      {project.contractType === "PAGO_UNICO" && !project.maintenanceActive && project.stage === "ENTREGADO" && (
+      {project.contractType === "PAGO_UNICO" && !project.maintenanceActive && !project.maintenanceEnded && project.stage === "ENTREGADO" && (
         <div className="max-w-md space-y-2 rounded-md border p-4">
           <h3 className="font-medium">Activar mantenimiento mensual</h3>
           <ActionForm action={activateMaintenance.bind(null, project.id)} submitLabel="Activar mantenimiento">
@@ -196,11 +222,12 @@ export function BillingSection({ project, plans }: { project: BillingProject; pl
       )}
 
       {project.maintenanceActive && (
-        <ActionForm
-          action={endMaintenance.bind(null, project.id)}
-          submitLabel="Dar de baja el mantenimiento"
-          variant="destructive"
-        />
+        <div className="max-w-md space-y-2 rounded-md border p-4">
+          <h3 className="font-medium">Dar de baja el mantenimiento</h3>
+          <ActionForm action={endMaintenance.bind(null, project.id)} submitLabel="Dar de baja el mantenimiento" variant="destructive">
+            <ConfirmCheckbox warning="Se eliminarán las cuotas futuras de mantenimiento que no tengan pagos y el abono dejará de sumar al MRR. Lo ya cobrado se conserva; luego se puede reanudar." />
+          </ActionForm>
+        </div>
       )}
     </section>
   );

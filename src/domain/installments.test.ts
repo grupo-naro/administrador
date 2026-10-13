@@ -7,6 +7,7 @@ import {
   planRecurring,
   planSubscription,
   repriceInstallments,
+  resumeStartSequence,
 } from "./installments";
 
 const dates = (xs: { dueDate: Date }[]) => xs.map((x) => toDateInput(x.dueDate));
@@ -107,5 +108,29 @@ describe("needsExtension", () => {
   it("pide más cuotas cuando quedan menos de 2 pendientes", () => {
     expect(needsExtension(1)).toBe(true);
     expect(needsExtension(2)).toBe(false);
+  });
+});
+
+describe("resumeStartSequence", () => {
+  it("continúa sin huecos si el siguiente vencimiento no pasó", () => {
+    expect(resumeStartSequence(d("2026-01-31"), 9, d("2026-09-15"))).toBe(10); // 2026-10-31
+  });
+
+  it("salta los meses en pausa manteniendo el ancla original (día 31)", () => {
+    const base = d("2026-01-31");
+    const n = resumeStartSequence(base, 3, d("2026-10-13")); // última: 2026-03-31
+    expect(n).toBe(10);
+    expect(dates(planRecurring({ type: "MANTENIMIENTO", feeCents: 1, baseDate: base, startSequence: n, count: 6 }))).toEqual([
+      "2026-10-31",
+      "2026-11-30",
+      "2026-12-31",
+      "2027-01-31",
+      "2027-02-28",
+      "2027-03-31",
+    ]);
+  });
+
+  it("incluye un vencimiento que cae justo hoy", () => {
+    expect(resumeStartSequence(d("2026-01-13"), 2, d("2026-10-13"))).toBe(10);
   });
 });

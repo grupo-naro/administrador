@@ -28,7 +28,11 @@ export function ActionForm({
           {state.error}
         </p>
       )}
-      {state?.message && <p className="break-all text-sm text-green-700">{state.message}</p>}
+      {state?.message && (
+        <p role="status" className="break-all text-sm text-green-700">
+          {state.message}
+        </p>
+      )}
       <Button type="submit" variant={variant} disabled={pending}>
         {pending ? "Procesando…" : submitLabel}
       </Button>

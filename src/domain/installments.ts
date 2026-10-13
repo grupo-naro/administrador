@@ -95,3 +95,13 @@ export function repriceInstallments(
 }
 
 export const needsExtension = (pendingRecurringCount: number): boolean => pendingRecurringCount < 2;
+
+/**
+ * Reanudación de un plan recurrente: primera secuencia > maxSequence cuyo vencimiento
+ * (anclado a baseDate, due = addMonths(base, seq - 1)) no quedó en el pasado. Los huecos son los meses en pausa.
+ */
+export function resumeStartSequence(baseDate: Date, maxSequence: number, today: Date): number {
+  let n = Math.max(maxSequence, 0) + 1;
+  while (addMonths(baseDate, n - 1).getTime() < today.getTime()) n++;
+  return n;
+}
