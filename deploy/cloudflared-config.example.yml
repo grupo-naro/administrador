@@ -1,7 +1,7 @@
 # Copiar a ~/.cloudflared/config.yml (Linux) o %USERPROFILE%\.cloudflared\config.yml (Windows)
 # y reemplazar los valores entre <>.
 tunnel: <ID-DEL-TUNEL>
-credentials-file: <RUTA>/<ID-DEL-TUNEL>.json
+credentials-file: <RUTA-ABSOLUTA>/<ID-DEL-TUNEL>.json   # Linux: /etc/cloudflared/<ID>.json
 ingress:
   - hostname: panel.tudominio.com
     service: http://127.0.0.1:3000
