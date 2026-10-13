@@ -1,15 +1,21 @@
 import { ActionForm } from "@/components/action-form";
 import { Field, SelectField } from "@/components/fields";
 import { toDateInput, todayAR, formatDate } from "@/domain/dates";
+import { needsExtension } from "@/domain/installments";
 import { installmentLabel } from "@/domain/labels";
 import { formatARS } from "@/domain/money";
 import { PAYMENT_METHODS, PLAN_LABEL, STATUS_CLASS, STATUS_LABEL } from "@/lib/labels";
 import type { InstallmentRow, PlanRow } from "@/server/billing/queries";
 import {
+  activateMaintenance,
   createDevelopmentPlan,
   createSubscriptionPlan,
   deletePayment,
+  endMaintenance,
+  extendPlan,
   registerPayment,
+  repricePlan,
+  setServiceSuspended,
   updateInstallment,
 } from "@/server/billing/actions";
 import { setProjectStage } from "@/server/projects/actions";
@@ -21,6 +27,9 @@ export interface BillingProject {
   totalCents: number | null;
   monthlyFeeCents: number | null;
   firstPaymentCents: number | null;
+  maintenanceActive: boolean;
+  maintenanceFeeCents: number | null;
+  serviceSuspended: boolean;
 }
 
 const centsToInput = (c: number | null) => (c ? c / 100 : undefined);
@@ -138,8 +147,61 @@ export function BillingSection({ project, plans }: { project: BillingProject; pl
               </tbody>
             </table>
           </div>
+          {plan.kind !== "DESARROLLO" && (
+            <div className="grid gap-4 md:grid-cols-2">
+              <details className="rounded-md border p-3">
+                <summary className="cursor-pointer text-sm font-medium">Actualizar abono (inflación)</summary>
+                <ActionForm
+                  action={repricePlan.bind(null, project.id, plan.kind)}
+                  submitLabel="Aplicar nuevo abono"
+                  className="mt-2 space-y-2"
+                >
+                  <Field label="Nuevo abono (ARS)" name="newFee" type="number" step="0.01" required />
+                  <Field label="Desde el vencimiento" name="fromDate" type="date" defaultValue={toDateInput(todayAR())} required />
+                  <p className="text-xs text-muted-foreground">
+                    Solo cambia cuotas mensuales sin pagos desde esa fecha. El anticipo, el primer pago y lo ya cobrado no se tocan.
+                  </p>
+                </ActionForm>
+              </details>
+              <div className="rounded-md border p-3 text-sm">
+                <p>
+                  Cuotas pendientes: {plan.installments.filter((i) => i.paidCents < i.amountCents).length}
+                  {needsExtension(plan.installments.filter((i) => i.paidCents < i.amountCents).length) && (
+                    <span className="ml-2 text-amber-700">· quedan pocas, generá más</span>
+                  )}
+                </p>
+                <ActionForm action={extendPlan.bind(null, plan.id)} submitLabel="Generar 6 cuotas más" variant="outline" className="mt-2" />
+              </div>
+            </div>
+          )}
         </div>
       ))}
+
+      {project.contractType === "SUSCRIPCION" && hasSub && (
+        <ActionForm
+          action={setServiceSuspended.bind(null, project.id, !project.serviceSuspended)}
+          submitLabel={project.serviceSuspended ? "Reactivar servicio" : "Suspender servicio"}
+          variant="outline"
+        />
+      )}
+
+      {project.contractType === "PAGO_UNICO" && !project.maintenanceActive && project.stage === "ENTREGADO" && (
+        <div className="max-w-md space-y-2 rounded-md border p-4">
+          <h3 className="font-medium">Activar mantenimiento mensual</h3>
+          <ActionForm action={activateMaintenance.bind(null, project.id)} submitLabel="Activar mantenimiento">
+            <Field label="Abono mensual (ARS)" name="fee" type="number" step="0.01" required />
+            <Field label="Primer cobro" name="firstDueDate" type="date" defaultValue={toDateInput(todayAR())} required />
+          </ActionForm>
+        </div>
+      )}
+
+      {project.maintenanceActive && (
+        <ActionForm
+          action={endMaintenance.bind(null, project.id)}
+          submitLabel="Dar de baja el mantenimiento"
+          variant="destructive"
+        />
+      )}
     </section>
   );
 }
