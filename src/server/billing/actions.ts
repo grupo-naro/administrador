@@ -190,33 +190,41 @@ export async function repricePlan(
   await requireAdmin();
   const parsed = parseForm(z.object({ newFee: money("Abono inválido"), fromDate: dateField() }), fd);
   if (!parsed.ok) return fail(parsed.error);
-  const plan = await prisma.installmentPlan.findUnique({
-    where: { projectId_kind: { projectId, kind } },
-    include: { installments: { include: { payments: true } } },
-  });
+  const plan = await prisma.installmentPlan.findUnique({ where: { projectId_kind: { projectId, kind } } });
   if (!plan) return fail("No hay plan para ajustar");
-  const items = plan.installments.map((i) => ({
-    id: i.id,
-    type: i.type,
-    dueDate: i.dueDate,
-    amountCents: decToCents(i.amount),
-    paidCents: i.payments.reduce((s, p) => s + decToCents(p.amount), 0),
-  }));
-  const changes = repriceInstallments(items, parsed.data.fromDate, parsed.data.newFee);
-  await prisma.$transaction([
-    ...changes.map((c) =>
-      prisma.installment.update({ where: { id: c.id }, data: { amount: centsToDec(c.amountCents) } }),
-    ),
-    prisma.project.update({
+  const updated = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Installment" WHERE "planId" = ${plan.id} FOR UPDATE`;
+    const installments = await tx.installment.findMany({
+      where: { planId: plan.id },
+      include: { payments: true },
+    });
+    const items = installments.map((i) => ({
+      id: i.id,
+      type: i.type,
+      dueDate: i.dueDate,
+      amountCents: decToCents(i.amount),
+      paidCents: i.payments.reduce((s, p) => s + decToCents(p.amount), 0),
+    }));
+    const changes = repriceInstallments(items, parsed.data.fromDate, parsed.data.newFee);
+    let count = 0;
+    for (const c of changes) {
+      const r = await tx.installment.updateMany({
+        where: { id: c.id, payments: { none: {} } },
+        data: { amount: centsToDec(c.amountCents) },
+      });
+      count += r.count;
+    }
+    await tx.project.update({
       where: { id: projectId },
       data:
         kind === "SUSCRIPCION"
           ? { monthlyFee: centsToDec(parsed.data.newFee) }
           : { maintenanceFee: centsToDec(parsed.data.newFee) },
-    }),
-  ]);
+    });
+    return count;
+  });
   refresh(projectId);
-  return { message: `Abono actualizado en ${changes.length} cuota(s)` };
+  return { message: `Abono actualizado en ${updated} cuota(s)` };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -293,19 +301,20 @@ export async function endMaintenance(projectId: string, _prev: ActionState, _fd:
   await requireAdmin();
   const plan = await prisma.installmentPlan.findUnique({
     where: { projectId_kind: { projectId, kind: "MANTENIMIENTO" } },
-    include: { installments: { include: { payments: true } } },
   });
   if (!plan) return fail("No hay mantenimiento activo");
   const today = todayAR();
-  const removable = plan.installments
-    .filter((i) => i.dueDate.getTime() >= today.getTime() && i.payments.length === 0)
-    .map((i) => i.id);
-  await prisma.$transaction([
-    prisma.installment.deleteMany({ where: { id: { in: removable } } }),
-    prisma.project.update({ where: { id: projectId }, data: { maintenanceEndedAt: today } }),
-  ]);
+  const removed = await prisma.$transaction(async (tx) => {
+    // Mismo bloqueo de fila que registerPayment: un pago concurrente o ya se confirmó (la cuota se conserva) o espera.
+    await tx.$queryRaw`SELECT id FROM "Installment" WHERE "planId" = ${plan.id} AND "dueDate" >= ${today} FOR UPDATE`;
+    const { count } = await tx.installment.deleteMany({
+      where: { planId: plan.id, dueDate: { gte: today }, payments: { none: {} } },
+    });
+    await tx.project.update({ where: { id: projectId }, data: { maintenanceEndedAt: today } });
+    return count;
+  });
   refresh(projectId);
-  return { message: `Mantenimiento dado de baja (${removable.length} cuota(s) futuras anuladas)` };
+  return { message: `Mantenimiento dado de baja (${removed} cuota(s) futuras anuladas)` };
 }
 
 export async function setServiceSuspended(
