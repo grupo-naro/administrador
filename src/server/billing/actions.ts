@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-guard";
@@ -16,6 +17,12 @@ const toCreate = (d: InstallmentDraft) => ({
   amount: centsToDec(d.amountCents),
   dueDate: d.dueDate,
 });
+
+class BillingError extends Error {}
+
+/** Bloquea la fila de la cuota hasta el fin de la transacción (evita check-then-act concurrente). */
+const lockInstallment = (tx: Prisma.TransactionClient, id: string) =>
+  tx.$queryRaw`SELECT 1 FROM "Installment" WHERE id = ${id} FOR UPDATE`;
 
 const refresh = (projectId: string) => revalidatePath(`/projects/${projectId}`);
 
@@ -78,22 +85,29 @@ export async function updateInstallment(installmentId: string, _prev: ActionStat
   await requireAdmin();
   const parsed = parseForm(z.object({ amount: money(), dueDate: dateField() }), fd);
   if (!parsed.ok) return fail(parsed.error);
-  const inst = await prisma.installment.findUnique({
-    where: { id: installmentId },
-    include: { payments: true, plan: true },
-  });
-  if (!inst) return fail("Cuota no encontrada");
-  const paid = inst.payments.reduce((s, p) => s + decToCents(p.amount), 0);
-  if (parsed.data.amount < paid) return fail("El monto no puede ser menor a lo ya pagado");
-  await prisma.$transaction(async (tx) => {
-    await tx.installment.update({
-      where: { id: installmentId },
-      data: { amount: centsToDec(parsed.data.amount), dueDate: parsed.data.dueDate },
+  try {
+    const projectId = await prisma.$transaction(async (tx) => {
+      await lockInstallment(tx, installmentId);
+      const inst = await tx.installment.findUnique({
+        where: { id: installmentId },
+        include: { payments: true, plan: true },
+      });
+      if (!inst) throw new BillingError("Cuota no encontrada");
+      const paid = inst.payments.reduce((s, p) => s + decToCents(p.amount), 0);
+      if (parsed.data.amount < paid) throw new BillingError("El monto no puede ser menor a lo ya pagado");
+      await tx.installment.update({
+        where: { id: installmentId },
+        data: { amount: centsToDec(parsed.data.amount), dueDate: parsed.data.dueDate },
+      });
+      await recalcInstallment(tx, installmentId);
+      return inst.plan.projectId;
     });
-    await recalcInstallment(tx, installmentId);
-  });
-  refresh(inst.plan.projectId);
-  return { message: "Cuota actualizada" };
+    refresh(projectId);
+    return { message: "Cuota actualizada" };
+  } catch (e) {
+    if (e instanceof BillingError) return fail(e.message);
+    throw e;
+  }
 }
 
 const paymentSchema = z.object({
@@ -107,31 +121,38 @@ export async function registerPayment(installmentId: string, _prev: ActionState,
   await requireAdmin();
   const parsed = parseForm(paymentSchema, fd);
   if (!parsed.ok) return fail(parsed.error);
-  const inst = await prisma.installment.findUnique({
-    where: { id: installmentId },
-    include: { payments: true, plan: true },
-  });
-  if (!inst) return fail("Cuota no encontrada");
-  const paidCents = inst.payments.reduce((s, p) => s + decToCents(p.amount), 0);
   try {
-    assertPayable(remainingCents({ amountCents: decToCents(inst.amount), paidCents }), parsed.data.amount);
-  } catch (e) {
-    return fail((e as Error).message);
-  }
-  await prisma.$transaction(async (tx) => {
-    await tx.payment.create({
-      data: {
-        installmentId,
-        amount: centsToDec(parsed.data.amount),
-        paidAt: parsed.data.paidAt,
-        method: parsed.data.method,
-        receiptNote: parsed.data.receiptNote,
-      },
+    const projectId = await prisma.$transaction(async (tx) => {
+      await lockInstallment(tx, installmentId);
+      const inst = await tx.installment.findUnique({
+        where: { id: installmentId },
+        include: { payments: true, plan: true },
+      });
+      if (!inst) throw new BillingError("Cuota no encontrada");
+      const paidCents = inst.payments.reduce((s, p) => s + decToCents(p.amount), 0);
+      try {
+        assertPayable(remainingCents({ amountCents: decToCents(inst.amount), paidCents }), parsed.data.amount);
+      } catch (e) {
+        throw new BillingError((e as Error).message);
+      }
+      await tx.payment.create({
+        data: {
+          installmentId,
+          amount: centsToDec(parsed.data.amount),
+          paidAt: parsed.data.paidAt,
+          method: parsed.data.method,
+          receiptNote: parsed.data.receiptNote,
+        },
+      });
+      await recalcInstallment(tx, installmentId);
+      return inst.plan.projectId;
     });
-    await recalcInstallment(tx, installmentId);
-  });
-  refresh(inst.plan.projectId);
-  return { message: "Pago registrado" };
+    refresh(projectId);
+    return { message: "Pago registrado" };
+  } catch (e) {
+    if (e instanceof BillingError) return fail(e.message);
+    throw e;
+  }
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
