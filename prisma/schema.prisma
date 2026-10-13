@@ -1,0 +1,185 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ProposalStatus {
+  BORRADOR
+  ENVIADA
+  ACEPTADA
+  RECHAZADA
+}
+enum ContractType {
+  PAGO_UNICO
+  SUSCRIPCION
+}
+enum ProjectStage {
+  COTIZACION
+  EN_DESARROLLO
+  ENTREGADO
+  EN_MANTENIMIENTO
+}
+enum CodeOwner {
+  CLIENTE
+  NARO
+}
+enum PlanKind {
+  DESARROLLO
+  SUSCRIPCION
+  MANTENIMIENTO
+}
+enum InstallmentType {
+  ANTICIPO
+  CUOTA
+  PRIMER_PAGO
+  MENSUAL
+  MANTENIMIENTO
+}
+enum InstallmentStatus {
+  PENDIENTE
+  PAGADO
+}
+enum AssetType {
+  DOMINIO
+  HOSTING
+  SERVIDOR
+}
+
+model AdminUser {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
+}
+
+model Client {
+  id          String     @id @default(cuid())
+  name        String
+  contactName String?
+  email       String?
+  phone       String?
+  taxId       String?
+  notes       String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  projects    Project[]
+  proposals   Proposal[]
+}
+
+model Proposal {
+  id            String         @id @default(cuid())
+  clientId      String
+  client        Client         @relation(fields: [clientId], references: [id])
+  title         String
+  scope         String?
+  oneTimePrice  Decimal        @db.Decimal(14, 2)
+  monthlyFee    Decimal        @db.Decimal(14, 2)
+  status        ProposalStatus @default(BORRADOR)
+  acceptedModel ContractType?
+  validUntil    DateTime?      @db.Date
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  project       Project?
+
+  @@index([clientId])
+}
+
+model Project {
+  id                  String               @id @default(cuid())
+  clientId            String
+  client              Client               @relation(fields: [clientId], references: [id])
+  proposalId          String?              @unique
+  proposal            Proposal?            @relation(fields: [proposalId], references: [id])
+  name                String
+  stage               ProjectStage         @default(COTIZACION)
+  contractType        ContractType
+  totalAmount         Decimal?             @db.Decimal(14, 2)
+  monthlyFee          Decimal?             @db.Decimal(14, 2)
+  firstPaymentAmount  Decimal?             @db.Decimal(14, 2)
+  serviceSuspended    Boolean              @default(false)
+  codeOwner           CodeOwner
+  maintenanceFee      Decimal?             @db.Decimal(14, 2)
+  maintenanceStartsAt DateTime?            @db.Date
+  maintenanceEndedAt  DateTime?            @db.Date
+  startedAt           DateTime?            @db.Date
+  deliveredAt         DateTime?            @db.Date
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  plans               InstallmentPlan[]
+  assets              InfrastructureAsset[]
+  tokens              ClientAccessToken[]
+
+  @@index([clientId])
+}
+
+model InstallmentPlan {
+  id               String        @id @default(cuid())
+  projectId        String
+  project          Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  kind             PlanKind
+  totalAmount      Decimal?      @db.Decimal(14, 2)
+  installmentCount Int?
+  createdAt        DateTime      @default(now())
+  installments     Installment[]
+
+  @@unique([projectId, kind])
+}
+
+model Installment {
+  id       String            @id @default(cuid())
+  planId   String
+  plan     InstallmentPlan   @relation(fields: [planId], references: [id], onDelete: Cascade)
+  type     InstallmentType
+  sequence Int
+  amount   Decimal           @db.Decimal(14, 2)
+  dueDate  DateTime          @db.Date
+  status   InstallmentStatus @default(PENDIENTE)
+  payments Payment[]
+
+  @@unique([planId, sequence])
+  @@index([dueDate, status])
+}
+
+model Payment {
+  id            String      @id @default(cuid())
+  installmentId String
+  installment   Installment @relation(fields: [installmentId], references: [id], onDelete: Cascade)
+  amount        Decimal     @db.Decimal(14, 2)
+  paidAt        DateTime    @db.Date
+  method        String
+  receiptNote   String?
+  receiptUrl    String?
+  createdAt     DateTime    @default(now())
+
+  @@index([paidAt])
+}
+
+model InfrastructureAsset {
+  id            String    @id @default(cuid())
+  projectId     String
+  project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type          AssetType
+  provider      String
+  identifier    String
+  renewalDate   DateTime  @db.Date
+  managedByNaro Boolean   @default(true)
+  costAmount    Decimal?  @db.Decimal(14, 2)
+
+  @@index([renewalDate])
+}
+
+model ClientAccessToken {
+  id           String    @id @default(cuid())
+  projectId    String
+  project      Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tokenHash    String    @unique
+  createdAt    DateTime  @default(now())
+  expiresAt    DateTime?
+  revokedAt    DateTime?
+  lastViewedAt DateTime?
+}
