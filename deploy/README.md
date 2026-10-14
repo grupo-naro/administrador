@@ -215,6 +215,13 @@ Reversión (con honestidad): **las migraciones de Prisma no son reversibles.**
 - Código: `git checkout <tag-o-commit-anterior>`, `pnpm install --frozen-lockfile`, `pnpm build`, copiar `public` y `.next/static`,
   `pm2 restart grupo-naro --update-env`. Código viejo sobre un esquema ya migrado puede fallar: restaurar también el dump.
 
+### Actualización a la versión con Analíticas
+
+- La migración nueva agrega `InfrastructureAsset.costEveryMonths` con valor por defecto 12. Los activos existentes quedan en 12 (pago anual).
+- La app no tiene formulario de edición de activos: para cambiar la periodicidad de uno, eliminarlo y volver a cargarlo con el "Se paga cada" correcto.
+- Los costos que muestra Analíticas son aproximaciones (el costo se reparte en el tiempo según esa periodicidad).
+- Se aplica con el `pnpm exec prisma migrate deploy` habitual de los pasos de arriba.
+
 ## 8. Verificación de punta a punta
 
 Prueba local (en el servidor) con la app arrancada:

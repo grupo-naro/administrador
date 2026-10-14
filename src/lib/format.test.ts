@@ -13,9 +13,21 @@ describe("formatPct", () => {
     expect(formatPct(Number.POSITIVE_INFINITY)).toBe("—");
   });
 
-  it("formatSignedPct agrega + a los positivos", () => {
-    expect(formatSignedPct(0.25).startsWith("+")).toBe(true);
-    expect(formatSignedPct(-0.25).startsWith("+")).toBe(false);
+  it("formatPct muestra '<0,1%' para fracciones positivas diminutas y 0 normal", () => {
+    expect(norm(formatPct(0.0004))).toBe("<0,1%");
+    expect(norm(formatPct(0))).toBe("0%");
+  });
+
+  it("formatSignedPct usa signo explícito (+ y − real)", () => {
+    expect(norm(formatSignedPct(0.25))).toBe("+25%");
+    expect(norm(formatSignedPct(-0.25))).toBe("−25%");
+    expect(norm(formatSignedPct(0))).toBe("0%");
+  });
+
+  it("formatSignedPct topa las variaciones enormes", () => {
+    expect(formatSignedPct(10)).toBe("+999% o más");
+    expect(formatSignedPct(-10.5)).toBe("−999% o más");
+    expect(norm(formatSignedPct(9.99))).toBe("+999%");
   });
 });
 

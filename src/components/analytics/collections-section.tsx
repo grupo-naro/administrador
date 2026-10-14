@@ -15,7 +15,11 @@ export function CollectionsSection({ d }: { d: Data }) {
   return (
     <div className="space-y-8">
       <KpiGrid>
-        <Kpi label="Deuda total de clientes" value={formatARS(d.debt.totalCents)} hint="Hoy · saldo de todas las cuotas" />
+        <Kpi
+          label="Saldo pendiente total"
+          value={formatARS(d.debt.totalCents)}
+          hint={`Hoy · vencido ${formatARS(overdueTotal)} + por vencer ${formatARS(d.debt.totalCents - overdueTotal)} (incluye cuotas futuras ya generadas)`}
+        />
         <Kpi label="Vence en los próximos 30 días" value={formatARS(d.debt.dueNext30Cents)} hint="Hoy · incluye lo que vence hoy" />
         <Kpi
           label="Vencido sin cobrar"
@@ -29,7 +33,7 @@ export function CollectionsSection({ d }: { d: Data }) {
           hint={
             p.count === 0
               ? `Sin cuotas pagadas en ${periodRangeLabel(d.current)}`
-              : `${p.count} ${p.count === 1 ? "cuota pagada" : "cuotas pagadas"} en el período · antes: ${formatPct(d.previousPunctuality.onTimePct)}`
+              : `${p.count} ${p.count === 1 ? "cuota pagada" : "cuotas pagadas"} en el período · antes: ${d.previousPunctuality.onTimePct === null ? "sin cuotas pagadas" : formatPct(d.previousPunctuality.onTimePct)}`
           }
         />
         {p.avgLateDays !== null && (
@@ -44,7 +48,7 @@ export function CollectionsSection({ d }: { d: Data }) {
         />
       </Block>
 
-      <Block title="Clientes con deuda vencida" note="Ordenados por saldo vencido.">
+      <Block title="Clientes con deuda vencida" note="Hoy. Ordenados por saldo vencido.">
         <SimpleTable
           headers={[
             { label: "Cliente" },

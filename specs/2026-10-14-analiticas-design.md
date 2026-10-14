@@ -39,7 +39,7 @@ Todo el dinero se calcula en **centavos enteros**. "Cuota" = `Installment`; "pag
 - **Cobrado** = Σ `Payment.amount` con `paidAt` dentro del rango, sin importar de qué cuota vengan.
 - **Proyectado** = Σ monto de las cuotas con `dueDate` dentro del rango.
 - **Cumplimiento** = Σ `min(pagado, monto)` (pagos de cualquier fecha) de las cuotas que vencían en el rango ÷ Proyectado. Sin valor si Proyectado es 0.
-- **Por cobrar** = Σ saldo de las cuotas del rango con `dueDate ≥ hoy`. **Vencido** = Σ saldo de las cuotas del rango con `dueDate < hoy`.
+- **Por cobrar del período** = Σ saldo de las cuotas del rango con `dueDate ≥ hoy`. **Vencido del período** = Σ saldo de las cuotas del rango con `dueDate < hoy`.
 - **Costos de infraestructura** = para cada activo con `managedByNaro` y `costAmount` cargado: `costAmount ÷ (costEveryMonths × 30,4375)` por día × días del rango (redondeado a centavos por activo); se suman. Es una aproximación: se asume que el activo existe todo el período.
 - **Balance neto** = Cobrado − Costos de infraestructura.
 - **Por origen**: Cobrado agrupado por el tipo de plan de la cuota (`DESARROLLO` = proyectos únicos, `SUSCRIPCION`, `MANTENIMIENTO`). **Por método**: Cobrado agrupado por `Payment.method`.
@@ -49,7 +49,7 @@ Todo el dinero se calcula en **centavos enteros**. "Cuota" = `Installment`; "pag
 ### 4.2 Cobranza
 - **Antigüedad de lo vencido** (hoy): cuotas con saldo > 0 y `dueDate < hoy`, en tramos por días de atraso: 1–7, 8–30, 31–60 y más de 60; para cada tramo, cantidad de cuotas y suma de saldos.
 - **Puntualidad** (período): cuotas totalmente pagadas cuyo último pago cae en el rango. A tiempo = fecha del último pago ≤ `dueDate`. Se muestra % a tiempo y demora promedio en días (solo de las que pagaron tarde). Sin valor si no hay cuotas.
-- **Deuda total** (hoy) = Σ saldo de todas las cuotas; **vence en los próximos 30 días** = Σ saldo de las cuotas con `dueDate` entre hoy y hoy + 30.
+- **Saldo pendiente total** (hoy) = Σ saldo de todas las cuotas (incluye las cuotas futuras ya generadas; se muestra dividido en vencido + por vencer); **vence en los próximos 30 días** = Σ saldo de las cuotas con `dueDate` entre hoy y hoy + 30.
 - **Clientes con deuda vencida** (hoy): por cliente, saldo vencido, cantidad de cuotas y días de atraso de la más antigua; ordenados por saldo.
 
 ### 4.3 Recurrente

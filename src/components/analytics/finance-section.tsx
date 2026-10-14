@@ -27,8 +27,8 @@ export function FinanceSection({ d }: { d: Data }) {
         <Kpi label="Cobrado" value={formatARS(cur.collectedCents)} hint="Dinero que entró en el período" delta={v.collected} />
         <Kpi label="Proyectado" value={formatARS(cur.projectedCents)} hint="Cuotas que vencían en el período" delta={v.projected} />
         <Kpi label="Cumplimiento" value={formatPct(cur.fulfillmentPct)} hint="De lo proyectado, cuánto ya está cobrado" />
-        <Kpi label="Por cobrar" value={formatARS(cur.upcomingCents)} hint="Cuotas del período que todavía no vencen" />
-        <Kpi label="Vencido sin cobrar" value={formatARS(cur.overdueCents)} hint="Cuotas del período ya vencidas" tone={cur.overdueCents > 0 ? "alert" : undefined} />
+        <Kpi label="Por cobrar del período" value={formatARS(cur.upcomingCents)} hint="Cuotas del período que todavía no vencen" />
+        <Kpi label="Vencido del período" value={formatARS(cur.overdueCents)} hint="Cuotas del período ya vencidas, sin cobrar" tone={cur.overdueCents > 0 ? "alert" : undefined} />
         <Kpi label="Costos de infraestructura" value={formatARS(cur.infraCostCents)} hint="Repartidos en el tiempo" delta={v.infraCost} positiveIsGood={false} />
         <Kpi
           label="Balance neto"

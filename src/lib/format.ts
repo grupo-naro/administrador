@@ -2,10 +2,17 @@ import { formatARS } from "@/domain/money";
 
 export function formatPct(fraction: number | null, maxDigits = 1): string {
   if (fraction === null || !Number.isFinite(fraction)) return "—";
+  if (fraction > 0 && fraction < 0.001) return "<0,1%";
   return new Intl.NumberFormat("es-AR", { style: "percent", maximumFractionDigits: maxDigits }).format(fraction);
 }
 
-export const formatSignedPct = (fraction: number): string => `${fraction > 0 ? "+" : ""}${formatPct(fraction)}`;
+/** Variación con signo explícito (+ / − real). Topa en 999 % para que no se lea como un número absurdo. */
+export function formatSignedPct(fraction: number): string {
+  if (fraction === 0 || !Number.isFinite(fraction)) return formatPct(Number.isFinite(fraction) ? fraction : null);
+  const sign = fraction > 0 ? "+" : "−";
+  if (Math.abs(fraction) > 9.99) return `${sign}999% o más`;
+  return `${sign}${formatPct(Math.abs(fraction))}`;
+}
 
 export function formatSignedARS(cents: number): string {
   if (cents === 0) return formatARS(0);

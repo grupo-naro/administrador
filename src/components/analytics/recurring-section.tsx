@@ -23,7 +23,7 @@ export function RecurringSection({ d }: { d: Data }) {
         <Kpi label="ARR" value={formatARS(cur.arrCents)} hint="Hoy · MRR × 12" />
         <Kpi label="Contratos activos" value={String(cur.activeContracts)} hint="Hoy · suscripciones y mantenimientos" />
         {cur.avgPerContractCents !== null && (
-          <Kpi label="Ingreso promedio por contrato" value={formatARS(cur.avgPerContractCents)} hint="MRR ÷ contratos activos" />
+          <Kpi label="Ingreso promedio por contrato" value={formatARS(cur.avgPerContractCents)} hint="Hoy · MRR ÷ contratos activos" />
         )}
         <Kpi label="Altas del período" value={String(cur.signups)} hint={`Período anterior: ${d.prev.signups}`} />
         {(cur.churnedMaintenance > 0 || d.prev.churnedMaintenance > 0) && (

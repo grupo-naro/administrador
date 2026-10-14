@@ -42,9 +42,9 @@ export function InfraAnalyticsSection({ d }: { d: Data }) {
     <div className="space-y-8">
       <KpiGrid>
         <Kpi label="Costo mensual equivalente" value={formatARS(d.monthlyEquivalentCents)} hint="Hoy · activos que gestiona Naro con costo cargado" />
-        <Kpi label="Activos cargados" value={String(d.total)} />
+        <Kpi label="Activos cargados" value={String(d.total)} hint="Hoy" />
         {renewals.expired.items.length > 0 && (
-          <Kpi label="Renovaciones vencidas" value={String(renewals.expired.items.length)} tone="alert" />
+          <Kpi label="Renovaciones vencidas" value={String(renewals.expired.items.length)} hint="Hoy" tone="alert" />
         )}
       </KpiGrid>
 
