@@ -1,6 +1,6 @@
 import type { buildCollections } from "@/domain/analytics/build";
 import { periodRangeLabel } from "@/domain/analytics/period";
-import { formatARS } from "@/domain/money";
+import { formatARS } from "@/lib/privacy";
 import { formatDays, formatPct } from "@/lib/format";
 import { Block } from "./block";
 import { Kpi, KpiGrid } from "./kpi";

@@ -10,6 +10,8 @@ import {
 import type { Facts } from "@/domain/analytics/facts";
 import { parsePeriodKey, type PeriodKey } from "@/domain/analytics/period";
 import { loadFacts } from "@/server/analytics/queries";
+import { PrivacyToggle } from "@/components/privacy-toggle";
+import { initPrivacy } from "@/lib/privacy";
 import { CollectionsSection } from "@/components/analytics/collections-section";
 import { FinanceSection } from "@/components/analytics/finance-section";
 import { RecurringSection } from "@/components/analytics/recurring-section";
@@ -49,11 +51,15 @@ export default async function AnalyticsPage({
   const sp = await searchParams;
   const periodo = parsePeriodKey(sp.periodo);
   const seccion = parseSectionKey(sp.seccion);
+  const hidden = await initPrivacy();
   const facts = await loadFacts();
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Analíticas</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold">Analíticas</h1>
+        <PrivacyToggle hidden={hidden} />
+      </div>
       <PeriodSelector periodo={periodo} seccion={seccion} />
       <SectionTabs periodo={periodo} seccion={seccion} />
       {renderSection(seccion, periodo, facts)}

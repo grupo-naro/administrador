@@ -1,5 +1,5 @@
 import type { buildRecurring } from "@/domain/analytics/build";
-import { formatARS } from "@/domain/money";
+import { formatARS } from "@/lib/privacy";
 import { BarChart } from "./bar-chart";
 import { Block, EmptyNote } from "./block";
 import { Kpi, KpiGrid } from "./kpi";

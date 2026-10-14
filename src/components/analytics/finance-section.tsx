@@ -1,6 +1,6 @@
 import type { buildFinance } from "@/domain/analytics/build";
 import { periodRangeLabel } from "@/domain/analytics/period";
-import { formatARS } from "@/domain/money";
+import { formatARS } from "@/lib/privacy";
 import { formatPct } from "@/lib/format";
 import { BarChart } from "./bar-chart";
 import { Block } from "./block";

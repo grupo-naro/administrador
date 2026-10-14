@@ -1,5 +1,5 @@
 import type { buildSales } from "@/domain/analytics/build";
-import { formatARS } from "@/domain/money";
+import { formatARS } from "@/lib/privacy";
 import { PROPOSAL_LABEL } from "@/lib/labels";
 import { formatDays, formatPct } from "@/lib/format";
 import { Block } from "./block";

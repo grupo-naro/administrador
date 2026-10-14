@@ -1,5 +1,5 @@
-import { formatARS } from "@/domain/money";
-import { formatCompactARS } from "@/lib/format";
+import { formatARS } from "@/lib/privacy";
+import { formatCompactARS } from "@/lib/privacy";
 
 export interface BarDatum {
   label: string;

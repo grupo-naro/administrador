@@ -1,5 +1,5 @@
 import type { buildPortfolio } from "@/domain/analytics/build";
-import { formatARS } from "@/domain/money";
+import { formatARS } from "@/lib/privacy";
 import { STAGE_LABEL } from "@/lib/labels";
 import { formatDays } from "@/lib/format";
 import { Block } from "./block";

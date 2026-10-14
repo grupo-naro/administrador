@@ -1,4 +1,5 @@
-import { formatSignedARS, formatSignedPct } from "@/lib/format";
+import { formatSignedPct } from "@/lib/format";
+import { formatSignedARS } from "@/lib/privacy";
 
 export interface Delta {
   diffCents: number;

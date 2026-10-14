@@ -1,7 +1,7 @@
 import type { buildInfra } from "@/domain/analytics/build";
 import type { RenewalGroup } from "@/domain/analytics/infra";
 import { formatDate } from "@/domain/dates";
-import { formatARS } from "@/domain/money";
+import { formatARS } from "@/lib/privacy";
 import { ASSET_LABEL } from "@/lib/labels";
 import { Block, EmptyNote } from "./block";
 import { Kpi, KpiGrid } from "./kpi";

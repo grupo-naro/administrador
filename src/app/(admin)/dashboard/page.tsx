@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { connection } from "next/server";
 import { formatDate } from "@/domain/dates";
-import { formatARS } from "@/domain/money";
+import { formatARS } from "@/lib/privacy";
 import { getDashboard } from "@/server/dashboard/queries";
+import { PrivacyToggle } from "@/components/privacy-toggle";
+import { initPrivacy } from "@/lib/privacy";
 
 // El panel lee la hora y la base en cada visita: la ruta bloquea en el servidor (opt-out documentado de Next 16).
 export const instant = false;
@@ -39,6 +41,7 @@ function AlertList({
 
 export default async function DashboardPage() {
   await connection();
+  const hidden = await initPrivacy();
   const d = await getDashboard();
   const cuota = (x: (typeof d.overdue)[number]) => ({
     id: x.id, label: x.label, date: x.dueDate, amount: x.amountCents - x.paidCents, href: `/projects/${x.projectId}`,
@@ -48,7 +51,10 @@ export default async function DashboardPage() {
   });
   return (
     <div className="space-y-8">
-      <h1 className="text-2xl font-semibold">Dashboard</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold">Dashboard</h1>
+        <PrivacyToggle hidden={hidden} />
+      </div>
 
       <section className="space-y-3">
         <h2 className="text-lg font-medium first-letter:uppercase">{d.months[0].label}</h2>
