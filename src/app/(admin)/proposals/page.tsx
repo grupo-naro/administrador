@@ -11,9 +11,9 @@ export default async function ProposalsPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Propuestas</h1>
-        <Button render={<Link href="/proposals/new" />}>Nueva propuesta</Button>
+        <Button nativeButton={false} render={<Link href="/proposals/new" />}>Nueva propuesta</Button>
       </div>
-      <ul className="divide-y rounded-md border">
+      <ul className="divide-y rounded-xl border bg-card">
         {proposals.length === 0 && <li className="p-4 text-sm text-muted-foreground">Sin propuestas.</li>}
         {proposals.map((p) => (
           <li key={p.id}>
@@ -22,7 +22,10 @@ export default async function ProposalsPage() {
                 {p.title} <span className="text-sm text-muted-foreground">— {p.client.name}</span>
               </span>
               <span className="text-sm text-muted-foreground">
-                {formatARS(decToCents(p.oneTimePrice))} único · {formatARS(decToCents(p.monthlyFee))}/mes ·{" "}
+                {p.monthlyFee
+                  ? `${formatARS(decToCents(p.oneTimePrice))} único · ${formatARS(decToCents(p.monthlyFee))}/mes`
+                  : `${formatARS(decToCents(p.oneTimePrice))} · Pago Único`}{" "}
+                ·{" "}
                 {PROPOSAL_LABEL[p.status]}
               </span>
             </Link>

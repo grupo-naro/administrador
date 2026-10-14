@@ -78,7 +78,7 @@ model Proposal {
   title         String
   scope         String?
   oneTimePrice  Decimal        @db.Decimal(14, 2)
-  monthlyFee    Decimal        @db.Decimal(14, 2)
+  monthlyFee    Decimal?        @db.Decimal(14, 2)
   status        ProposalStatus @default(BORRADOR)
   acceptedModel ContractType?
   validUntil    DateTime?      @db.Date

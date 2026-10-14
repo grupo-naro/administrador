@@ -17,7 +17,13 @@ export default async function NewProposalPage() {
         <Field label="Título" name="title" required />
         <TextAreaField label="Alcance" name="scope" />
         <Field label="Precio Pago Único (ARS)" name="oneTimePrice" type="number" step="0.01" required />
-        <Field label="Abono mensual Suscripción (ARS)" name="monthlyFee" type="number" step="0.01" required />
+        <Field
+          label="Abono mensual (ARS), opcional"
+          name="monthlyFee"
+          type="number"
+          step="0.01"
+          placeholder="Vacío = solo Pago Único"
+        />
         <Field label="Válida hasta" name="validUntil" type="date" />
       </ActionForm>
       {clients.length === 0 && <p className="text-sm text-red-600">Primero creá un cliente.</p>}

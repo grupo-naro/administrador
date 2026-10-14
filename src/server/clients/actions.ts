@@ -9,11 +9,8 @@ import { fail, optText, parseForm, text, type ActionState } from "@/lib/form";
 import { isRecordNotFound } from "@/lib/prisma-errors";
 
 const schema = z.object({
-  name: text("El nombre es obligatorio"),
-  contactName: optText,
-  email: optText,
-  phone: optText,
-  taxId: optText,
+  name: text("El nombre es obligatorio"),
+  phone: optText,
   notes: optText,
 });
 

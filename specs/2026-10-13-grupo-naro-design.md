@@ -74,8 +74,8 @@ prisma/schema.prisma
 | Entidad | Campos clave |
 |---|---|
 | `AdminUser` | email (único), passwordHash, name |
-| `Client` | name, contactName, email, phone, taxId, notes |
-| `Proposal` | clientId, title, scope, oneTimePrice, monthlyFee, status (`BORRADOR`/`ENVIADA`/`ACEPTADA`/`RECHAZADA`), acceptedModel?, validUntil? |
+| `Client` | name, phone, notes (la ficha usa solo estos campos; las columnas contactName, email y taxId siguen en la base pero no se usan) |
+| `Proposal` | clientId, title, scope, oneTimePrice, monthlyFee? (opcional: sin abono mensual la propuesta es solo de Pago Único y no puede aceptarse como Suscripción), status (`BORRADOR`/`ENVIADA`/`ACEPTADA`/`RECHAZADA`), acceptedModel?, validUntil? |
 | `Project` | clientId, proposalId?, name, stage (`COTIZACION`/`EN_DESARROLLO`/`ENTREGADO`/`EN_MANTENIMIENTO`), contractType (`PAGO_UNICO`/`SUSCRIPCION`), totalAmount?, monthlyFee?, firstPaymentAmount?, serviceSuspended (boolean; `serviceStatus` ACTIVO/VENCIDA/SUSPENDIDO se deriva al leer), codeOwner (`CLIENTE`/`NARO`), maintenanceFee?, maintenanceStartsAt?, maintenanceEndedAt?, startedAt?, deliveredAt? |
 | `InstallmentPlan` | projectId, kind (`DESARROLLO`/`SUSCRIPCION`/`MANTENIMIENTO`), totalAmount?, installmentCount?; un proyecto puede tener más de un plan |
 | `Installment` | planId, type (`ANTICIPO`/`CUOTA`/`PRIMER_PAGO`/`MENSUAL`/`MANTENIMIENTO`), sequence, amount, dueDate, status (`PENDIENTE`/`PAGADO`; `VENCIDO` derivado) |

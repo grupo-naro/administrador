@@ -13,7 +13,8 @@ export default async function ProposalPage({ params }: { params: Promise<{ id: s
   const p = await getProposal(id);
   if (!p) notFound();
   const oneTime = decToCents(p.oneTimePrice);
-  const monthly = decToCents(p.monthlyFee);
+  // Sin abono mensual la propuesta es solo de Pago Único.
+  const monthly = p.monthlyFee ? decToCents(p.monthlyFee) : null;
   return (
     <div className="max-w-2xl space-y-6">
       <div>
@@ -23,17 +24,19 @@ export default async function ProposalPage({ params }: { params: Promise<{ id: s
         </p>
       </div>
       {p.scope && <p className="whitespace-pre-wrap text-sm">{p.scope}</p>}
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div className="rounded-md border p-4">
-          <p className="text-sm text-muted-foreground">Opción A — Pago Único</p>
+      <div className={`grid gap-3 ${monthly ? "sm:grid-cols-2" : ""}`}>
+        <div className="rounded-xl border bg-card p-4">
+          <p className="text-sm text-muted-foreground">{monthly ? "Opción A — Pago Único" : "Pago Único"}</p>
           <p className="text-xl font-semibold">{formatARS(oneTime)}</p>
           <p className="text-xs text-muted-foreground">50% de anticipo + resto en 2 o 3 cuotas</p>
         </div>
-        <div className="rounded-md border p-4">
-          <p className="text-sm text-muted-foreground">Opción B — Suscripción</p>
-          <p className="text-xl font-semibold">{formatARS(monthly)}/mes</p>
-          <p className="text-xs text-muted-foreground">El primer pago se define al aceptar</p>
-        </div>
+        {monthly && (
+          <div className="rounded-xl border bg-card p-4">
+            <p className="text-sm text-muted-foreground">Opción B — Suscripción</p>
+            <p className="text-xl font-semibold">{formatARS(monthly)}/mes</p>
+            <p className="text-xs text-muted-foreground">El primer pago se define al aceptar</p>
+          </div>
+        )}
       </div>
 
       {p.status === "ACEPTADA" ? (
@@ -51,20 +54,29 @@ export default async function ProposalPage({ params }: { params: Promise<{ id: s
             <ActionForm action={setProposalStatus.bind(null, id, "ENVIADA")} submitLabel="Marcar enviada" variant="outline" />
             <ActionForm action={setProposalStatus.bind(null, id, "RECHAZADA")} submitLabel="Marcar rechazada" variant="outline" />
           </div>
-          <section className="space-y-3 rounded-md border p-4">
+          <section className="space-y-3 rounded-xl border bg-card p-4">
             <h2 className="text-lg font-medium">Aceptar y crear proyecto</h2>
             <ActionForm action={acceptProposal.bind(null, id)} submitLabel="Aceptar propuesta">
-              <SelectField
-                label="Modelo elegido"
-                name="model"
-                options={[
-                  { value: "PAGO_UNICO", label: "Pago Único" },
-                  { value: "SUSCRIPCION", label: "Suscripción" },
-                ]}
-              />
-              <Field label="Total Pago Único (ARS)" name="total" type="number" step="0.01" defaultValue={oneTime / 100} />
-              <Field label="Abono mensual (ARS)" name="monthlyFee" type="number" step="0.01" defaultValue={monthly / 100} />
-              <Field label="Primer pago Suscripción (ARS)" name="firstPayment" type="number" step="0.01" placeholder="ej. 600000" />
+              {monthly ? (
+                <>
+                  <SelectField
+                    label="Modelo elegido"
+                    name="model"
+                    options={[
+                      { value: "PAGO_UNICO", label: "Pago Único" },
+                      { value: "SUSCRIPCION", label: "Suscripción" },
+                    ]}
+                  />
+                  <Field label="Total Pago Único (ARS)" name="total" type="number" step="0.01" defaultValue={oneTime / 100} />
+                  <Field label="Abono mensual (ARS)" name="monthlyFee" type="number" step="0.01" defaultValue={monthly / 100} />
+                  <Field label="Primer pago Suscripción (ARS)" name="firstPayment" type="number" step="0.01" placeholder="ej. 600000" />
+                </>
+              ) : (
+                <>
+                  <input type="hidden" name="model" value="PAGO_UNICO" />
+                  <Field label="Total Pago Único (ARS)" name="total" type="number" step="0.01" defaultValue={oneTime / 100} />
+                </>
+              )}
             </ActionForm>
           </section>
         </>

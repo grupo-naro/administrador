@@ -15,7 +15,8 @@ const proposalSchema = z.object({
   title: text("El título es obligatorio"),
   scope: optText,
   oneTimePrice: money("Precio de Pago Único inválido"),
-  monthlyFee: money("Abono mensual inválido"),
+  // Vacío = la propuesta es solo de Pago Único.
+  monthlyFee: optMoney,
   validUntil: optDateField,
 });
 
@@ -25,7 +26,7 @@ export async function createProposal(_prev: ActionState, fd: FormData): Promise<
   if (!parsed.ok) return fail(parsed.error);
   const { oneTimePrice, monthlyFee, ...rest } = parsed.data;
   const proposal = await prisma.proposal.create({
-    data: { ...rest, oneTimePrice: centsToDec(oneTimePrice), monthlyFee: centsToDec(monthlyFee) },
+    data: { ...rest, oneTimePrice: centsToDec(oneTimePrice), monthlyFee: monthlyFee ? centsToDec(monthlyFee) : null },
   });
   revalidatePath("/proposals");
   redirect(`/proposals/${proposal.id}`);
@@ -64,6 +65,9 @@ export async function acceptProposal(id: string, _prev: ActionState, fd: FormDat
   if (!proposal) return fail("Propuesta no encontrada");
   if (proposal.status === "ACEPTADA") return fail("La propuesta ya fue aceptada");
   const d = parsed.data;
+  if (d.model === "SUSCRIPCION" && proposal.monthlyFee == null) {
+    return fail("Esta propuesta no tiene abono mensual: solo se puede aceptar como Pago Único");
+  }
   const input = {
     clientId: proposal.clientId,
     proposalId: id,
