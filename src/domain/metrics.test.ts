@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { parseDateInput as d } from "./dates";
-import { installmentAlerts, mrrCents, realVsProjected, renewalAlerts } from "./metrics";
+import { installmentAlerts, monthSummary, mrrCents, realVsProjected, renewalAlerts } from "./metrics";
 
 const today = d("2026-10-13");
 
@@ -64,5 +64,60 @@ describe("renewalAlerts", () => {
     );
     expect(res.expired.map((x) => x.id)).toEqual(["vencido"]);
     expect(res.upcoming.map((x) => x.id)).toEqual(["en-30"]);
+  });
+});
+
+describe("monthSummary", () => {
+  const from = d("2026-10-01");
+  const to = d("2026-11-01");
+  const pay = (amountCents: number, paidAt: string, kind: "DESARROLLO" | "SUSCRIPCION" | "MANTENIMIENTO") => ({
+    amountCents, paidAt: d(paidAt), kind,
+  });
+  const inst = (amountCents: number, paidCents: number, dueDate: string, kind: "DESARROLLO" | "SUSCRIPCION" | "MANTENIMIENTO") => ({
+    amountCents, paidCents, dueDate: d(dueDate), kind,
+  });
+
+  it("facturado = pagos del mes, total y por origen (rango [from, to))", () => {
+    const s = monthSummary(
+      {
+        payments: [
+          pay(100, "2026-10-01", "DESARROLLO"),
+          pay(40, "2026-10-31", "SUSCRIPCION"),
+          pay(10, "2026-10-15", "MANTENIMIENTO"),
+          pay(999, "2026-09-30", "DESARROLLO"), // mes anterior
+          pay(999, "2026-11-01", "SUSCRIPCION"), // mes siguiente
+        ],
+        installments: [],
+      },
+      from,
+      to,
+    );
+    expect(s.collected).toEqual({ totalCents: 150, oneTimeCents: 100, subscriptionCents: 40, maintenanceCents: 10 });
+  });
+
+  it("estimado = saldo de las cuotas que vencen en el mes, separado en únicos y recurrentes", () => {
+    const s = monthSummary(
+      {
+        payments: [],
+        installments: [
+          inst(500, 0, "2026-10-20", "DESARROLLO"), // 500 pendiente
+          inst(300, 100, "2026-10-05", "DESARROLLO"), // parcial: faltan 200 (vencida dentro del mes, cuenta)
+          inst(400, 0, "2026-10-31", "SUSCRIPCION"), // 400
+          inst(80, 0, "2026-10-10", "MANTENIMIENTO"), // 80
+          inst(700, 700, "2026-10-12", "DESARROLLO"), // pagada: no suma
+          inst(999, 0, "2026-09-30", "DESARROLLO"), // vencida de un mes anterior: no suma
+          inst(999, 0, "2026-11-01", "SUSCRIPCION"), // mes siguiente: no suma
+        ],
+      },
+      from,
+      to,
+    );
+    expect(s.expected).toEqual({ totalCents: 1180, oneTimeCents: 700, recurringCents: 480 });
+  });
+
+  it("sin movimientos todo es cero", () => {
+    const s = monthSummary({ payments: [], installments: [] }, from, to);
+    expect(s.collected.totalCents).toBe(0);
+    expect(s.expected.totalCents).toBe(0);
   });
 });

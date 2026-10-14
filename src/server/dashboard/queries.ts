@@ -1,7 +1,7 @@
 import "server-only";
 import { addMonths, todayAR } from "@/domain/dates";
 import { installmentLabel } from "@/domain/labels";
-import { installmentAlerts, mrrCents, realVsProjected, renewalAlerts } from "@/domain/metrics";
+import { installmentAlerts, monthSummary, mrrCents, realVsProjected, renewalAlerts } from "@/domain/metrics";
 import { serviceStatus } from "@/domain/status";
 import { prisma } from "@/lib/prisma";
 import { decToCents } from "@/server/mappers";
@@ -36,9 +36,20 @@ export async function getDashboard(now = new Date()) {
       amountCents: decToCents(i.amount),
       paidCents,
       dueDate: i.dueDate,
+      kind: i.plan.kind,
       payments: i.payments.map((p) => ({ amountCents: decToCents(p.amount), paidAt: p.paidAt })),
     };
   });
+
+  // Mes en curso: lo que ya entró y lo que falta cobrar de las cuotas que vencen este mes.
+  const thisMonth = monthSummary(
+    {
+      payments: rows.flatMap((r) => r.payments.map((p) => ({ ...p, kind: r.kind }))),
+      installments: rows,
+    },
+    monthStart,
+    addMonths(monthStart, 1),
+  );
 
   const allPayments = rows.flatMap((r) => r.payments);
   const months = Array.from({ length: 4 }, (_, k) => {
@@ -85,5 +96,5 @@ export async function getDashboard(now = new Date()) {
     30,
   );
 
-  return { today, mrr, months, overdue, upcoming, renewals };
+  return { today, thisMonth, mrr, months, overdue, upcoming, renewals };
 }
