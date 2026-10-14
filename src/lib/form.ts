@@ -73,3 +73,12 @@ export const optDateField = z
   .optional()
   .refine((v) => !v || dateOrNull(v) !== null, "Fecha inválida")
   .transform((v) => (v ? (dateOrNull(v) as Date) : null));
+
+/** Email normalizado a minúsculas (el login busca por email en minúsculas). */
+export const emailField = z.string().trim().toLowerCase().email("Email inválido");
+
+/** Contraseña de administrador: 10+ caracteres y hasta 72 bytes (bcrypt ignora lo que pase de ahí). */
+export const passwordField = z
+  .string()
+  .min(10, "La contraseña debe tener al menos 10 caracteres")
+  .refine((v) => new TextEncoder().encode(v).length <= 72, "La contraseña no puede superar los 72 bytes");
