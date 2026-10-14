@@ -2,9 +2,11 @@ import { describe, it, expect } from "vitest";
 import { parseDateInput as d, toDateInput } from "./dates";
 import {
   BATCH_SIZE,
+  addInterval,
   needsExtension,
   planOneTime,
   planRecurring,
+  planReschedule,
   planSubscription,
   repriceInstallments,
   resumeStartSequence,
@@ -132,5 +134,75 @@ describe("resumeStartSequence", () => {
 
   it("incluye un vencimiento que cae justo hoy", () => {
     expect(resumeStartSequence(d("2026-01-13"), 2, d("2026-10-13"))).toBe(10);
+  });
+});
+
+describe("addInterval", () => {
+  it("suma días, semanas y meses desde la fecha base", () => {
+    expect(toDateInput(addInterval(d("2026-11-10"), { every: 15, unit: "dias" }, 1))).toBe("2026-11-25");
+    expect(toDateInput(addInterval(d("2026-11-10"), { every: 20, unit: "dias" }, 3))).toBe("2027-01-09");
+    expect(toDateInput(addInterval(d("2026-11-10"), { every: 1, unit: "semanas" }, 2))).toBe("2026-11-24");
+    expect(toDateInput(addInterval(d("2026-11-10"), { every: 2, unit: "semanas" }, 1))).toBe("2026-11-24");
+    expect(toDateInput(addInterval(d("2027-01-31"), { every: 1, unit: "meses" }, 1))).toBe("2027-02-28");
+    expect(toDateInput(addInterval(d("2027-01-31"), { every: 2, unit: "meses" }, 1))).toBe("2027-03-31");
+  });
+
+  it("rechaza frecuencias inválidas", () => {
+    for (const every of [0, -1, 1.5, Number.NaN]) {
+      expect(() => addInterval(d("2026-11-10"), { every, unit: "dias" }, 1)).toThrow("entero mayor a cero");
+    }
+    expect(() => addInterval(d("2026-11-10"), { every: 400, unit: "dias" }, 1)).toThrow("demasiado grande");
+  });
+});
+
+describe("planOneTime con frecuencia", () => {
+  it("cuotas cada 15 días desde el anticipo", () => {
+    const plan = planOneTime({
+      totalCents: 90_000, count: 3, startDate: d("2026-11-10"), interval: { every: 15, unit: "dias" },
+    });
+    expect(plan.map((p) => p.type)).toEqual(["ANTICIPO", "CUOTA", "CUOTA", "CUOTA"]);
+    expect(dates(plan)).toEqual(["2026-11-10", "2026-11-25", "2026-12-10", "2026-12-25"]);
+    expect(sum(plan)).toBe(90_000);
+  });
+
+  it("cuotas semanales", () => {
+    const plan = planOneTime({
+      totalCents: 100_000, count: 2, startDate: d("2026-11-10"), interval: { every: 1, unit: "semanas" },
+    });
+    expect(dates(plan)).toEqual(["2026-11-10", "2026-11-17", "2026-11-24"]);
+  });
+
+  it("sin frecuencia sigue siendo mensual", () => {
+    const plan = planOneTime({ totalCents: 100_000, count: 2, startDate: d("2026-11-10") });
+    expect(dates(plan)).toEqual(["2026-11-10", "2026-12-10", "2027-01-10"]);
+  });
+});
+
+describe("planReschedule", () => {
+  const item = (id: string, type: "ANTICIPO" | "CUOTA", paidCents: number) => ({ id, type, sequence: 0, paidCents });
+
+  it("reprograma solo cuotas sin pagos, en orden de secuencia", () => {
+    const res = planReschedule(
+      [
+        { id: "c3", type: "CUOTA", sequence: 4, paidCents: 0 },
+        { id: "anticipo", type: "ANTICIPO", sequence: 1, paidCents: 0 },
+        { id: "c1", type: "CUOTA", sequence: 2, paidCents: 5_000 },
+        { id: "c2", type: "CUOTA", sequence: 3, paidCents: 0 },
+      ],
+      d("2026-12-01"),
+      { every: 20, unit: "dias" },
+    );
+    expect(res.map((r) => [r.id, toDateInput(r.dueDate)])).toEqual([
+      ["c2", "2026-12-01"],
+      ["c3", "2026-12-21"],
+    ]);
+  });
+
+  it("no devuelve nada si no hay cuotas elegibles", () => {
+    expect(planReschedule([item("a", "ANTICIPO", 0), item("b", "CUOTA", 1)], d("2026-12-01"), { every: 1, unit: "semanas" })).toEqual([]);
+  });
+
+  it("valida la frecuencia", () => {
+    expect(() => planReschedule([], d("2026-12-01"), { every: 0, unit: "dias" })).toThrow("entero mayor a cero");
   });
 });

@@ -13,10 +13,12 @@ import {
   BATCH_SIZE,
   planOneTime,
   planRecurring,
+  planReschedule,
   planSubscription,
   repriceInstallments,
   resumeStartSequence,
   type InstallmentDraft,
+  type Interval,
 } from "@/domain/installments";
 import { assertPayable, remainingCents } from "@/domain/status";
 import { centsToDec, decToCents } from "@/server/mappers";
@@ -48,10 +50,17 @@ const confirmed = (fd: FormData) => fd.get("confirm") === "si";
 
 const refresh = (projectId: string) => revalidatePath(`/projects/${projectId}`);
 
+/** Campos del formulario "Cada [N] [días|semanas|meses]". */
+const intervalFields = {
+  every: z.string().trim().regex(/^\d+$/, "La frecuencia debe ser un número entero mayor a cero"),
+  unit: z.enum(["dias", "semanas", "meses"]),
+};
+const toInterval = (d: { every: string; unit: Interval["unit"] }): Interval => ({ every: Number(d.every), unit: d.unit });
+
 export async function createDevelopmentPlan(projectId: string, _prev: ActionState, fd: FormData): Promise<ActionState> {
   await requireAdmin();
   const parsed = parseForm(
-    z.object({ total: money("Total inválido"), count: z.enum(["2", "3"]), startDate: dateField() }),
+    z.object({ total: money("Total inválido"), count: z.enum(["2", "3"]), startDate: dateField(), ...intervalFields }),
     fd,
   );
   if (!parsed.ok) return fail(parsed.error);
@@ -60,7 +69,12 @@ export async function createDevelopmentPlan(projectId: string, _prev: ActionStat
   if (project.contractType !== "PAGO_UNICO") return fail("El proyecto no es de Pago Único");
   if (project.plans.some((p) => p.kind === "DESARROLLO")) return fail("Ya existe un plan de desarrollo");
   const { total, count, startDate } = parsed.data;
-  const drafts = planOneTime({ totalCents: total, count: Number(count), startDate });
+  let drafts: InstallmentDraft[];
+  try {
+    drafts = planOneTime({ totalCents: total, count: Number(count), startDate, interval: toInterval(parsed.data) });
+  } catch (e) {
+    return fail((e as Error).message);
+  }
   try {
     await prisma.$transaction([
       prisma.project.update({ where: { id: projectId }, data: { totalAmount: centsToDec(total) } }),
@@ -80,6 +94,59 @@ export async function createDevelopmentPlan(projectId: string, _prev: ActionStat
   }
   refresh(projectId);
   return { message: "Plan de cobros creado" };
+}
+
+/** Reprograma los vencimientos de las cuotas sin pagos del plan de desarrollo (anticipo y cuotas con pagos no se tocan). */
+export async function reschedulePlan(projectId: string, _prev: ActionState, fd: FormData): Promise<ActionState> {
+  await requireAdmin();
+  const parsed = parseForm(z.object({ firstDate: dateField("Fecha de la primera cuota inválida"), ...intervalFields }), fd);
+  if (!parsed.ok) return fail(parsed.error);
+  const plan = await prisma.installmentPlan.findUnique({
+    where: { projectId_kind: { projectId, kind: "DESARROLLO" } },
+    select: { id: true },
+  });
+  if (!plan) return fail("El proyecto no tiene plan de desarrollo");
+  let updated = 0;
+  try {
+    updated = await prisma.$transaction(async (tx) => {
+      await lockPlanInstallments(tx, plan.id);
+      const installments = await tx.installment.findMany({
+        where: { planId: plan.id },
+        include: { payments: { select: { amount: true } } },
+      });
+      let changes: { id: string; dueDate: Date }[];
+      try {
+        changes = planReschedule(
+          installments.map((i) => ({
+            id: i.id,
+            type: i.type,
+            sequence: i.sequence,
+            paidCents: i.payments.reduce((s, p) => s + decToCents(p.amount), 0),
+          })),
+          parsed.data.firstDate,
+          toInterval(parsed.data),
+        );
+      } catch (e) {
+        throw new BillingError((e as Error).message);
+      }
+      if (changes.length === 0) throw new BillingError("No hay cuotas pendientes para reprogramar");
+      let count = 0;
+      for (const c of changes) {
+        // Se revalida bajo el bloqueo: una cuota que recibió un pago entretanto no se mueve.
+        const r = await tx.installment.updateMany({
+          where: { id: c.id, payments: { none: {} } },
+          data: { dueDate: c.dueDate },
+        });
+        count += r.count;
+      }
+      return count;
+    });
+  } catch (e) {
+    if (e instanceof BillingError) return fail(e.message);
+    throw e;
+  }
+  refresh(projectId);
+  return { message: `Se reprogramaron ${updated} cuota(s)` };
 }
 
 export async function createSubscriptionPlan(projectId: string, _prev: ActionState, fd: FormData): Promise<ActionState> {

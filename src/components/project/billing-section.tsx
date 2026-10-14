@@ -1,5 +1,5 @@
 import { ActionForm } from "@/components/action-form";
-import { ConfirmCheckbox, Field, SelectField } from "@/components/fields";
+import { ConfirmCheckbox, Field, IntervalFields, SelectField } from "@/components/fields";
 import { toDateInput, todayAR, formatDate } from "@/domain/dates";
 import { BATCH_SIZE, needsExtension } from "@/domain/installments";
 import { installmentLabel } from "@/domain/labels";
@@ -15,6 +15,7 @@ import {
   extendPlan,
   registerPayment,
   repricePlan,
+  reschedulePlan,
   setServiceSuspended,
   updateInstallment,
 } from "@/server/billing/actions";
@@ -73,7 +74,7 @@ function InstallmentRowView({ i }: { i: InstallmentRow }) {
             </ActionForm>
           </details>
         )}
-        {i.paidCents === 0 && (
+        {i.paidCents < i.amountCents && (
           <details>
             <summary className="cursor-pointer text-sm underline">Editar cuota</summary>
             <ActionForm action={updateInstallment.bind(null, i.id)} submitLabel="Guardar cuota" className="mt-2 space-y-2">
@@ -98,7 +99,7 @@ export function BillingSection({ project, plans }: { project: BillingProject; pl
       <h2 className="text-xl font-semibold">Cobros</h2>
 
       {project.stage === "COTIZACION" && anticipoPaid && (
-        <div className="flex flex-wrap items-center gap-3 rounded-md border border-green-300 bg-green-50 p-3 text-sm">
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-green-300 bg-green-50 p-3 text-sm">
           <span>Anticipo cobrado: ya se puede iniciar el desarrollo.</span>
           <ActionForm action={setProjectStage.bind(null, project.id)} submitLabel="Pasar a En Desarrollo" className="flex items-center gap-2">
             <input type="hidden" name="stage" value="EN_DESARROLLO" />
@@ -107,18 +108,19 @@ export function BillingSection({ project, plans }: { project: BillingProject; pl
       )}
 
       {project.contractType === "PAGO_UNICO" && !hasDev && (
-        <div className="max-w-md space-y-2 rounded-md border p-4">
+        <div className="max-w-md space-y-2 rounded-xl border bg-card p-4">
           <h3 className="font-medium">Crear plan de cobros (50% anticipo + cuotas)</h3>
           <ActionForm action={createDevelopmentPlan.bind(null, project.id)} submitLabel="Crear plan">
             <Field label="Total (ARS)" name="total" type="number" step="0.01" defaultValue={centsToInput(project.totalCents)} required />
             <SelectField label="Cuotas del 50% restante" name="count" options={[{ value: "2", label: "2 cuotas" }, { value: "3", label: "3 cuotas" }]} />
             <Field label="Fecha del anticipo" name="startDate" type="date" defaultValue={toDateInput(todayAR())} required />
+            <IntervalFields legend="Vencimiento de las cuotas" />
           </ActionForm>
         </div>
       )}
 
       {project.contractType === "SUSCRIPCION" && !hasSub && (
-        <div className="max-w-md space-y-2 rounded-md border p-4">
+        <div className="max-w-md space-y-2 rounded-xl border bg-card p-4">
           <h3 className="font-medium">Crear plan de suscripción (6 cuotas)</h3>
           <ActionForm action={createSubscriptionPlan.bind(null, project.id)} submitLabel="Crear plan">
             <Field label="Abono mensual (ARS)" name="monthlyFee" type="number" step="0.01" defaultValue={centsToInput(project.monthlyFeeCents)} required />
@@ -135,7 +137,7 @@ export function BillingSection({ project, plans }: { project: BillingProject; pl
             Total {formatARS(plan.summary.totalCents)} · Abonado {formatARS(plan.summary.paidCents)} · Saldo{" "}
             {formatARS(plan.summary.pendingCents)}
           </p>
-          <div className="overflow-x-auto rounded-md border">
+          <div className="overflow-x-auto rounded-xl border bg-card">
             <table className="w-full text-sm">
               <thead className="bg-muted text-left">
                 <tr>
@@ -155,7 +157,7 @@ export function BillingSection({ project, plans }: { project: BillingProject; pl
             </table>
           </div>
           {plan.kind === "MANTENIMIENTO" && project.maintenanceEnded && (
-            <div className="max-w-md space-y-2 rounded-md border p-4">
+            <div className="max-w-md space-y-2 rounded-xl border bg-card p-4">
               <h3 className="font-medium">Reanudar mantenimiento</h3>
               <p className="text-xs text-muted-foreground">
                 Se generan {BATCH_SIZE} cuotas nuevas desde el próximo vencimiento, en el mismo día del mes que el plan original. Los
@@ -173,9 +175,37 @@ export function BillingSection({ project, plans }: { project: BillingProject; pl
               </ActionForm>
             </div>
           )}
+          {plan.kind === "DESARROLLO" &&
+            (() => {
+              const editable = plan.installments.filter((i) => i.type === "CUOTA" && i.paidCents === 0);
+              if (editable.length === 0) return null;
+              return (
+                <details className="rounded-xl border bg-card p-3">
+                  <summary className="cursor-pointer text-sm font-medium">Reprogramar cuotas pendientes</summary>
+                  <ActionForm
+                    action={reschedulePlan.bind(null, project.id)}
+                    submitLabel="Reprogramar cuotas"
+                    className="mt-2 max-w-md space-y-3"
+                  >
+                    <Field
+                      label="Vencimiento de la primera cuota pendiente"
+                      name="firstDate"
+                      type="date"
+                      defaultValue={toDateInput(editable[0].dueDate)}
+                      required
+                    />
+                    <IntervalFields legend="Frecuencia entre cuotas" />
+                    <p className="text-xs text-muted-foreground">
+                      Cambia solo las fechas de las {editable.length} cuota(s) sin pagos. Los montos, el anticipo y las cuotas con pagos no se tocan.
+                      Para ajustar una sola cuota usá &quot;Editar cuota&quot;.
+                    </p>
+                  </ActionForm>
+                </details>
+              );
+            })()}
           {plan.kind !== "DESARROLLO" && !(plan.kind === "MANTENIMIENTO" && project.maintenanceEnded) && (
             <div className="grid gap-4 md:grid-cols-2">
-              <details className="rounded-md border p-3">
+              <details className="rounded-xl border bg-card p-3">
                 <summary className="cursor-pointer text-sm font-medium">Actualizar abono (inflación)</summary>
                 <ActionForm
                   action={repricePlan.bind(null, project.id, plan.kind)}
@@ -189,7 +219,7 @@ export function BillingSection({ project, plans }: { project: BillingProject; pl
                   </p>
                 </ActionForm>
               </details>
-              <div className="rounded-md border p-3 text-sm">
+              <div className="rounded-xl border bg-card p-3 text-sm">
                 <p>
                   Cuotas pendientes: {plan.installments.filter((i) => i.paidCents < i.amountCents).length}
                   {needsExtension(plan.installments.filter((i) => i.paidCents < i.amountCents).length) && (
@@ -212,7 +242,7 @@ export function BillingSection({ project, plans }: { project: BillingProject; pl
       )}
 
       {project.contractType === "PAGO_UNICO" && !project.maintenanceActive && !project.maintenanceEnded && project.stage === "ENTREGADO" && (
-        <div className="max-w-md space-y-2 rounded-md border p-4">
+        <div className="max-w-md space-y-2 rounded-xl border bg-card p-4">
           <h3 className="font-medium">Activar mantenimiento mensual</h3>
           <ActionForm action={activateMaintenance.bind(null, project.id)} submitLabel="Activar mantenimiento">
             <Field label="Abono mensual (ARS)" name="fee" type="number" step="0.01" required />
@@ -222,7 +252,7 @@ export function BillingSection({ project, plans }: { project: BillingProject; pl
       )}
 
       {project.maintenanceActive && (
-        <div className="max-w-md space-y-2 rounded-md border p-4">
+        <div className="max-w-md space-y-2 rounded-xl border bg-card p-4">
           <h3 className="font-medium">Dar de baja el mantenimiento</h3>
           <ActionForm action={endMaintenance.bind(null, project.id)} submitLabel="Dar de baja el mantenimiento" variant="destructive">
             <ConfirmCheckbox warning="Se eliminarán las cuotas futuras de mantenimiento que no tengan pagos y el abono dejará de sumar al MRR. Lo ya cobrado se conserva; luego se puede reanudar." />

@@ -15,7 +15,39 @@ const assertPositive = (cents: number, what: string) => {
   if (!Number.isInteger(cents) || cents <= 0) throw new Error(`${what} debe ser mayor a cero`);
 };
 
-export function planOneTime(a: { totalCents: number; count: number; startDate: Date }): InstallmentDraft[] {
+export type IntervalUnit = "dias" | "semanas" | "meses";
+
+/** Frecuencia entre cuotas: "cada N días / semanas / meses". */
+export interface Interval {
+  every: number;
+  unit: IntervalUnit;
+}
+
+export const MONTHLY: Interval = { every: 1, unit: "meses" };
+
+const MAX_EVERY: Record<IntervalUnit, number> = { dias: 365, semanas: 52, meses: 24 };
+
+function assertInterval(interval: Interval) {
+  if (!Number.isInteger(interval.every) || interval.every < 1) {
+    throw new Error("La frecuencia debe ser un número entero mayor a cero");
+  }
+  if (interval.every > MAX_EVERY[interval.unit]) throw new Error("La frecuencia es demasiado grande");
+}
+
+/** Fecha `n` períodos después de `base` (n = 0 devuelve la base). Los meses recortan fin de mes sin derivar. */
+export function addInterval(base: Date, interval: Interval, n: number): Date {
+  assertInterval(interval);
+  if (interval.unit === "meses") return addMonths(base, interval.every * n);
+  const days = interval.unit === "semanas" ? interval.every * 7 : interval.every;
+  return new Date(base.getTime() + days * n * 86_400_000);
+}
+
+export function planOneTime(a: {
+  totalCents: number;
+  count: number;
+  startDate: Date;
+  interval?: Interval;
+}): InstallmentDraft[] {
   assertPositive(a.totalCents, "El total");
   if (a.count !== 2 && a.count !== 3) throw new Error("Las cuotas deben ser 2 o 3");
   const anticipo = Math.round(a.totalCents / 2);
@@ -29,10 +61,27 @@ export function planOneTime(a: { totalCents: number; count: number; startDate: D
       type: "CUOTA",
       sequence: i + 1,
       amountCents: i === a.count ? remaining - base * (a.count - 1) : base,
-      dueDate: addMonths(a.startDate, i),
+      dueDate: addInterval(a.startDate, a.interval ?? MONTHLY, i),
     });
   }
   return drafts;
+}
+
+/**
+ * Nuevos vencimientos para las cuotas (type CUOTA) sin pagos de un plan de Pago Único:
+ * la primera elegible vence en `firstDate` y las siguientes cada `interval`. El anticipo y las
+ * cuotas con algún pago no se tocan.
+ */
+export function planReschedule(
+  items: { id: string; type: InstallmentType; sequence: number; paidCents: number }[],
+  firstDate: Date,
+  interval: Interval,
+): { id: string; dueDate: Date }[] {
+  assertInterval(interval);
+  return items
+    .filter((i) => i.type === "CUOTA" && i.paidCents === 0)
+    .sort((a, b) => a.sequence - b.sequence)
+    .map((i, k) => ({ id: i.id, dueDate: addInterval(firstDate, interval, k) }));
 }
 
 export function planRecurring(a: {

@@ -45,7 +45,7 @@ export function SelectField(p: {
         id={id}
         name={p.name}
         defaultValue={p.defaultValue}
-        className="h-9 w-full rounded-md border bg-transparent px-3 text-sm"
+        className="h-9 w-full rounded-lg border bg-transparent px-3 text-sm"
       >
         {p.options.map((o) => (
           <option key={o.value} value={o.value}>
@@ -71,12 +71,39 @@ export function TextAreaField(p: { label: string; name: string; defaultValue?: s
 export function ConfirmCheckbox({ warning, label = "Entiendo y quiero continuar" }: { warning: string; label?: string }) {
   const id = useId();
   return (
-    <div className="space-y-1 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
+    <div className="space-y-1 rounded-lg border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
       <p>{warning}</p>
       <label htmlFor={id} className="flex items-center gap-2 font-medium">
         <input id={id} type="checkbox" name="confirm" value="si" required />
         {label}
       </label>
     </div>
+  );
+}
+
+/** "Cada [N] [días | semanas | meses]": frecuencia entre cuotas. Los nombres de campo son `every` y `unit`. */
+export function IntervalFields({ legend = "Frecuencia de las cuotas" }: { legend?: string }) {
+  const id = useId();
+  return (
+    <fieldset className="space-y-1">
+      <legend className="text-sm font-medium">{legend}</legend>
+      <div className="flex items-center gap-2">
+        <Label htmlFor={`${id}-every`} className="text-muted-foreground">
+          Cada
+        </Label>
+        <Input id={`${id}-every`} name="every" type="number" min={1} step={1} defaultValue={1} required className="w-20" />
+        <select
+          name="unit"
+          defaultValue="meses"
+          aria-label="Unidad de la frecuencia"
+          className="h-9 rounded-lg border bg-transparent px-3 text-sm"
+        >
+          <option value="dias">días</option>
+          <option value="semanas">semanas</option>
+          <option value="meses">meses</option>
+        </select>
+      </div>
+      <p className="text-xs text-muted-foreground">Ej.: cada 15 días, cada 1 semana o cada 1 mes.</p>
+    </fieldset>
   );
 }
