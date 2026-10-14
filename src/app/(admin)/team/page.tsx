@@ -39,7 +39,7 @@ export default async function TeamPage() {
         <ActionForm action={createAdminUser} submitLabel="Crear usuario" className="max-w-sm space-y-3">
           <Field label="Nombre" name="name" required />
           <Field label="Email" name="email" type="email" required />
-          <Field label="Contraseña inicial (mínimo 10 caracteres)" name="password" type="password" required />
+          <Field label="Contraseña inicial (mínimo 6, con mayúscula y minúscula)" name="password" type="password" required />
           <Field label="Repetir contraseña" name="passwordConfirm" type="password" required />
         </ActionForm>
       </section>
@@ -48,7 +48,7 @@ export default async function TeamPage() {
         <h2 className="text-lg font-medium">Cambiar mi contraseña</h2>
         <ActionForm action={changeOwnPassword} submitLabel="Cambiar contraseña" className="max-w-sm space-y-3">
           <Field label="Contraseña actual" name="currentPassword" type="password" required />
-          <Field label="Contraseña nueva (mínimo 10 caracteres)" name="newPassword" type="password" required />
+          <Field label="Contraseña nueva (mínimo 6, con mayúscula y minúscula)" name="newPassword" type="password" required />
           <Field label="Repetir contraseña nueva" name="newPasswordConfirm" type="password" required />
         </ActionForm>
       </section>

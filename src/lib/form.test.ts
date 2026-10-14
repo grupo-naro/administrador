@@ -29,26 +29,34 @@ describe("money / optMoney", () => {
 describe("passwordField / emailField", () => {
   const schema = z.object({ email: emailField, password: passwordField });
 
-  it("acepta una contraseña de 10 caracteres y normaliza el email a minúsculas", () => {
-    const r = parseForm(schema, fd({ email: "  Ana@Gruponaro.COM ", password: "1234567890" }));
-    expect(r).toEqual({ ok: true, data: { email: "ana@gruponaro.com", password: "1234567890" } });
+  it("acepta una contraseña de 6 caracteres con mayúscula y minúscula y normaliza el email", () => {
+    const r = parseForm(schema, fd({ email: "  Ana@Gruponaro.COM ", password: "Abcdef" }));
+    expect(r).toEqual({ ok: true, data: { email: "ana@gruponaro.com", password: "Abcdef" } });
   });
 
   it("rechaza contraseñas cortas con un mensaje claro", () => {
-    const r = parseForm(schema, fd({ email: "a@b.com", password: "123456789" }));
-    expect(r).toEqual({ ok: false, error: "La contraseña debe tener al menos 10 caracteres" });
+    const r = parseForm(schema, fd({ email: "a@b.com", password: "Abcde" }));
+    expect(r).toEqual({ ok: false, error: "La contraseña debe tener al menos 6 caracteres" });
+  });
+
+  it("exige al menos una mayúscula y una minúscula", () => {
+    const msg = "La contraseña debe tener al menos una mayúscula y una minúscula";
+    expect(parseForm(schema, fd({ email: "a@b.com", password: "abcdef" }))).toEqual({ ok: false, error: msg });
+    expect(parseForm(schema, fd({ email: "a@b.com", password: "ABCDEF" }))).toEqual({ ok: false, error: msg });
+    expect(parseForm(schema, fd({ email: "a@b.com", password: "123456" }))).toEqual({ ok: false, error: msg });
+    expect(parseForm(schema, fd({ email: "a@b.com", password: "Ñandú1" })).ok).toBe(true);
   });
 
   it("rechaza contraseñas de más de 72 bytes (límite de bcrypt)", () => {
-    expect(parseForm(schema, fd({ email: "a@b.com", password: "a".repeat(72) })).ok).toBe(true);
-    const long = parseForm(schema, fd({ email: "a@b.com", password: "a".repeat(73) }));
+    expect(parseForm(schema, fd({ email: "a@b.com", password: "A" + "a".repeat(71) })).ok).toBe(true);
+    const long = parseForm(schema, fd({ email: "a@b.com", password: "A" + "a".repeat(72) }));
     expect(long).toEqual({ ok: false, error: "La contraseña no puede superar los 72 bytes" });
     // 40 caracteres "ñ" = 80 bytes en UTF-8
-    expect(parseForm(schema, fd({ email: "a@b.com", password: "ñ".repeat(40) })).ok).toBe(false);
+    expect(parseForm(schema, fd({ email: "a@b.com", password: "Ñ" + "ñ".repeat(39) })).ok).toBe(false);
   });
 
   it("rechaza emails inválidos", () => {
-    expect(parseForm(schema, fd({ email: "no-es-email", password: "1234567890" }))).toEqual({
+    expect(parseForm(schema, fd({ email: "no-es-email", password: "Abcdef" }))).toEqual({
       ok: false,
       error: "Email inválido",
     });
