@@ -1,12 +1,21 @@
 import { connection } from "next/server";
-import { buildCollections, buildFinance, buildRecurring } from "@/domain/analytics/build";
+import {
+  buildCollections,
+  buildFinance,
+  buildInfra,
+  buildPortfolio,
+  buildRecurring,
+  buildSales,
+} from "@/domain/analytics/build";
 import type { Facts } from "@/domain/analytics/facts";
 import { parsePeriodKey, type PeriodKey } from "@/domain/analytics/period";
 import { loadFacts } from "@/server/analytics/queries";
 import { CollectionsSection } from "@/components/analytics/collections-section";
 import { FinanceSection } from "@/components/analytics/finance-section";
 import { RecurringSection } from "@/components/analytics/recurring-section";
-import { EmptyNote } from "@/components/analytics/block";
+import { InfraAnalyticsSection } from "@/components/analytics/infra-section";
+import { PortfolioSection } from "@/components/analytics/portfolio-section";
+import { SalesSection } from "@/components/analytics/sales-section";
 import { PeriodSelector, SectionTabs } from "@/components/analytics/selectors";
 import { parseSectionKey, type SectionKey } from "@/components/analytics/sections";
 
@@ -22,8 +31,12 @@ function renderSection(seccion: SectionKey, periodo: PeriodKey, facts: Facts) {
       return <CollectionsSection d={buildCollections(facts, periodo)} />;
     case "recurrente":
       return <RecurringSection d={buildRecurring(facts, periodo)} />;
-    default:
-      return <EmptyNote>Esta pestaña todavía no está disponible.</EmptyNote>;
+    case "ventas":
+      return <SalesSection d={buildSales(facts, periodo)} />;
+    case "proyectos":
+      return <PortfolioSection d={buildPortfolio(facts, periodo)} />;
+    case "infra":
+      return <InfraAnalyticsSection d={buildInfra(facts)} />;
   }
 }
 
