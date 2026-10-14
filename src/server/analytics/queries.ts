@@ -5,6 +5,12 @@ import { serviceStatus } from "@/domain/status";
 import { prisma } from "@/lib/prisma";
 import { decToCents } from "@/server/mappers";
 
+/**
+ * Los createdAt son instantes reales (no @db.Date): se llevan al día calendario de Buenos Aires
+ * (spec §3) para que no caigan en el período siguiente entre las 21:00 y las 24:00 (hora AR).
+ */
+const arDay = (d: Date): Date => todayAR(d);
+
 /** Carga una vez todos los datos que usan las analíticas y los mapea a centavos y fechas (los cálculos son del dominio). */
 export async function loadFacts(now: Date = new Date()): Promise<Facts> {
   const today = todayAR(now);
@@ -87,7 +93,7 @@ export async function loadFacts(now: Date = new Date()): Promise<Facts> {
         },
         today,
       );
-      contracts.push({ kind: "SUSCRIPCION", feeCents: decToCents(p.monthlyFee), status, startedAt: sub.createdAt, endedAt: null });
+      contracts.push({ kind: "SUSCRIPCION", feeCents: decToCents(p.monthlyFee), status, startedAt: arDay(sub.createdAt), endedAt: null });
       if (status === "ACTIVO") activeRecurring.add(p.id);
     }
     const maint = p.plans.find((pl) => pl.kind === "MANTENIMIENTO");
@@ -97,7 +103,7 @@ export async function loadFacts(now: Date = new Date()): Promise<Facts> {
         kind: "MANTENIMIENTO",
         feeCents: decToCents(p.maintenanceFee),
         status: ended ? "FINALIZADO" : "ACTIVO",
-        startedAt: maint.createdAt,
+        startedAt: arDay(maint.createdAt),
         endedAt: p.maintenanceEndedAt,
       });
       if (!ended) activeRecurring.add(p.id);
@@ -111,12 +117,12 @@ export async function loadFacts(now: Date = new Date()): Promise<Facts> {
     contracts,
     proposals: proposals.map((p) => ({
       status: p.status,
-      createdAt: p.createdAt,
+      createdAt: arDay(p.createdAt),
       validUntil: p.validUntil,
       oneTimePriceCents: decToCents(p.oneTimePrice),
       project: p.project
         ? {
-            createdAt: p.project.createdAt,
+            createdAt: arDay(p.project.createdAt),
             contractType: p.project.contractType,
             totalCents: p.project.totalAmount ? decToCents(p.project.totalAmount) : null,
             monthlyFeeCents: p.project.monthlyFee ? decToCents(p.project.monthlyFee) : null,
@@ -129,12 +135,12 @@ export async function loadFacts(now: Date = new Date()): Promise<Facts> {
       contractType: p.contractType,
       totalCents: p.totalAmount ? decToCents(p.totalAmount) : null,
       monthlyFeeCents: p.monthlyFee ? decToCents(p.monthlyFee) : null,
-      createdAt: p.createdAt,
+      createdAt: arDay(p.createdAt),
       startedAt: p.startedAt,
       deliveredAt: p.deliveredAt,
       activeRecurring: activeRecurring.has(p.id),
     })),
-    clients: clients.map((c) => ({ id: c.id, name: c.name, createdAt: c.createdAt, collectedCents: collectedByClient.get(c.id) ?? 0 })),
+    clients: clients.map((c) => ({ id: c.id, name: c.name, createdAt: arDay(c.createdAt), collectedCents: collectedByClient.get(c.id) ?? 0 })),
     assets: assets.map((a) => ({
       id: a.id,
       type: a.type,
