@@ -14,9 +14,9 @@ export const PLAN_LABEL = {
 } as const;
 export const STATUS_LABEL = { PENDIENTE: "Pendiente", PAGADO: "Pagado", VENCIDO: "Vencido" } as const;
 export const STATUS_CLASS = {
-  PENDIENTE: "bg-amber-100 text-amber-800",
-  PAGADO: "bg-green-100 text-green-800",
-  VENCIDO: "bg-red-100 text-red-800",
+  PENDIENTE: "bg-amber-50 text-amber-700",
+  PAGADO: "bg-emerald-50 text-emerald-700",
+  VENCIDO: "bg-red-50 text-red-700",
 } as const;
 export const SERVICE_LABEL = { ACTIVO: "Activo", VENCIDA: "Vencida", SUSPENDIDO: "Suspendido" } as const;
 export const PROPOSAL_LABEL = {

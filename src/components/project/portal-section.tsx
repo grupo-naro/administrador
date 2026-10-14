@@ -14,7 +14,7 @@ export function PortalSection({
       <h2 className="text-xl font-semibold">Enlace para el cliente</h2>
       {tokens.length === 0 && <p className="text-sm text-muted-foreground">No hay un enlace activo.</p>}
       {tokens.map((t) => (
-        <div key={t.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3 text-sm">
+        <div key={t.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-card p-3 text-sm">
           <span>
             Activo desde {formatDate(t.createdAt)} ·{" "}
             {t.lastViewedAt ? `visto por última vez ${formatDate(t.lastViewedAt)}` : "nunca visto"}

@@ -13,7 +13,7 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Pro
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Proyectos</h1>
-        <Button render={<Link href="/projects/new" />}>Nuevo proyecto</Button>
+        <Button nativeButton={false} render={<Link href="/projects/new" />}>Nuevo proyecto</Button>
       </div>
       <div className="flex flex-wrap gap-2 text-sm">
         <Link href="/projects" className={!active ? "font-semibold underline" : ""}>Todos</Link>
@@ -23,7 +23,7 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Pro
           </Link>
         ))}
       </div>
-      <ul className="divide-y rounded-md border">
+      <ul className="divide-y rounded-xl border bg-card">
         {projects.length === 0 && <li className="p-4 text-sm text-muted-foreground">Sin proyectos.</li>}
         {projects.map((p) => (
           <li key={p.id}>

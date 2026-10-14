@@ -8,9 +8,9 @@ export default async function ClientsPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Clientes</h1>
-        <Button render={<Link href="/clients/new" />}>Nuevo cliente</Button>
+        <Button nativeButton={false} render={<Link href="/clients/new" />}>Nuevo cliente</Button>
       </div>
-      <ul className="divide-y rounded-md border">
+      <ul className="divide-y rounded-xl border bg-card">
         {clients.length === 0 && <li className="p-4 text-sm text-muted-foreground">Todavía no hay clientes.</li>}
         {clients.map((c) => (
           <li key={c.id}>

@@ -13,7 +13,7 @@ export default async function InfrastructurePage() {
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold">Infraestructura</h1>
       <p className="text-sm text-muted-foreground">Los activos se agregan desde la ficha de cada proyecto.</p>
-      <ul className="divide-y rounded-md border">
+      <ul className="divide-y rounded-xl border bg-card">
         {assets.length === 0 && <li className="p-4 text-sm text-muted-foreground">Sin activos.</li>}
         {assets.map((a) => (
           <li key={a.id} className="flex flex-wrap justify-between gap-2 p-4 text-sm">

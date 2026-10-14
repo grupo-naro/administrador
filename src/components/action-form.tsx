@@ -11,12 +11,14 @@ export function ActionForm({
   submitLabel = "Guardar",
   variant = "default",
   className,
+  submitClassName,
   children,
 }: {
   action: Action;
   submitLabel?: string;
   variant?: "default" | "outline" | "destructive";
   className?: string;
+  submitClassName?: string;
   children?: ReactNode;
 }) {
   const [state, formAction, pending] = useActionState(action, undefined);
@@ -33,7 +35,7 @@ export function ActionForm({
           {state.message}
         </p>
       )}
-      <Button type="submit" variant={variant} disabled={pending}>
+      <Button type="submit" variant={variant} disabled={pending} className={submitClassName}>
         {pending ? "Procesando…" : submitLabel}
       </Button>
     </form>

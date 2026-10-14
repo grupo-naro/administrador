@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { Logo } from "@/components/logo";
 import { formatDate } from "@/domain/dates";
 import { formatARS } from "@/domain/money";
 import { PLAN_LABEL, STAGE_LABEL, STATUS_CLASS, STATUS_LABEL } from "@/lib/labels";
@@ -20,12 +21,15 @@ export default async function PortalPage({ params }: { params: Promise<{ token: 
   if (!view) notFound();
 
   return (
+    <div className="brand-glow min-h-screen">
     <main className="mx-auto w-full max-w-3xl space-y-8 p-4 sm:p-8">
-      <header>
+      <Logo />
+      <header className="space-y-2">
         <p className="text-sm text-muted-foreground">{view.clientName}</p>
-        <h1 className="text-2xl font-semibold">{view.projectName}</h1>
-        <p className="mt-1 text-sm">
-          Estado del proyecto: <strong>{STAGE_LABEL[view.stage as keyof typeof STAGE_LABEL] ?? view.stage}</strong>
+        <h1 className="text-3xl font-bold">{view.projectName}</h1>
+        <p className="inline-flex items-center gap-2 rounded-full bg-accent px-3 py-1 text-sm font-medium text-accent-foreground">
+          <span className="size-1.5 rounded-full bg-primary" aria-hidden />
+          {STAGE_LABEL[view.stage as keyof typeof STAGE_LABEL] ?? view.stage}
         </p>
       </header>
 
@@ -37,15 +41,15 @@ export default async function PortalPage({ params }: { params: Promise<{ token: 
         <section key={plan.kind} className="space-y-4">
           <h2 className="text-lg font-semibold">{PLAN_LABEL[plan.kind]}</h2>
           <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-md border p-3">
+            <div className="rounded-xl border bg-card p-3">
               <p className="text-xs text-muted-foreground">Total abonado</p>
               <p className="font-semibold">{formatARS(plan.paidCents)}</p>
             </div>
-            <div className="rounded-md border p-3">
+            <div className="rounded-xl border bg-card p-3">
               <p className="text-xs text-muted-foreground">Saldo pendiente</p>
               <p className="font-semibold">{formatARS(plan.pendingCents)}</p>
             </div>
-            <div className="rounded-md border p-3">
+            <div className="rounded-xl border bg-card p-3">
               <p className="text-xs text-muted-foreground">Total</p>
               <p className="font-semibold">{formatARS(plan.totalCents)}</p>
             </div>
@@ -53,7 +57,7 @@ export default async function PortalPage({ params }: { params: Promise<{ token: 
 
           <div>
             <h3 className="mb-1 text-sm font-medium">Cuotas pendientes</h3>
-            <ul className="divide-y rounded-md border text-sm">
+            <ul className="divide-y rounded-xl border bg-card text-sm">
               {plan.pending.length === 0 && <li className="p-3 text-muted-foreground">No hay cuotas pendientes.</li>}
               {plan.pending.map((p, i) => (
                 <li key={i} className="flex flex-wrap items-center justify-between gap-2 p-3">
@@ -73,7 +77,7 @@ export default async function PortalPage({ params }: { params: Promise<{ token: 
 
           <div>
             <h3 className="mb-1 text-sm font-medium">Historial de pagos</h3>
-            <ul className="divide-y rounded-md border text-sm">
+            <ul className="divide-y rounded-xl border bg-card text-sm">
               {plan.payments.length === 0 && (
                 <li className="p-3 text-muted-foreground">Todavía no hay pagos registrados.</li>
               )}
@@ -90,5 +94,6 @@ export default async function PortalPage({ params }: { params: Promise<{ token: 
         </section>
       ))}
     </main>
+    </div>
   );
 }

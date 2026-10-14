@@ -14,7 +14,7 @@ export function InfraSection({
   return (
     <section className="space-y-4">
       <h2 className="text-xl font-semibold">Infraestructura</h2>
-      <ul className="divide-y rounded-md border">
+      <ul className="divide-y rounded-xl border bg-card">
         {assets.length === 0 && <li className="p-3 text-sm text-muted-foreground">Sin dominios ni hosting cargados.</li>}
         {assets.map((a) => (
           <li key={a.id} className="flex flex-wrap items-center justify-between gap-2 p-3 text-sm">

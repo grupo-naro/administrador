@@ -17,7 +17,7 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
 
       <section className="space-y-2">
         <h2 className="text-lg font-medium">Proyectos</h2>
-        <ul className="divide-y rounded-md border">
+        <ul className="divide-y rounded-xl border bg-card">
           {client.projects.length === 0 && <li className="p-3 text-sm text-muted-foreground">Sin proyectos.</li>}
           {client.projects.map((p) => (
             <li key={p.id}>
@@ -34,7 +34,7 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
 
       <section className="space-y-2">
         <h2 className="text-lg font-medium">Propuestas</h2>
-        <ul className="divide-y rounded-md border">
+        <ul className="divide-y rounded-xl border bg-card">
           {client.proposals.length === 0 && <li className="p-3 text-sm text-muted-foreground">Sin propuestas.</li>}
           {client.proposals.map((p) => (
             <li key={p.id}>
