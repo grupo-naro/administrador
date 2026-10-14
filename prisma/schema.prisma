@@ -169,6 +169,7 @@ model InfrastructureAsset {
   renewalDate   DateTime  @db.Date
   managedByNaro Boolean   @default(true)
   costAmount    Decimal?  @db.Decimal(14, 2)
+  costEveryMonths Int     @default(12)
 
   @@index([renewalDate])
 }

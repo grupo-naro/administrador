@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { formatDate, todayAR } from "@/domain/dates";
 import { renewalAlerts } from "@/domain/metrics";
+import { formatARS } from "@/domain/money";
 import { ASSET_LABEL } from "@/lib/labels";
 import { listAssets } from "@/server/infrastructure/queries";
+import { decToCents } from "@/server/mappers";
 
 export default async function InfrastructurePage() {
   const assets = await listAssets();
@@ -24,7 +26,9 @@ export default async function InfrastructurePage() {
               </Link>{" "}
               · {a.managedByNaro ? "Gestiona Naro" : "Gestiona el cliente"}
             </span>
-            <span className={expiredIds.has(a.id) ? "font-medium text-red-600" : ""}>Renueva {formatDate(a.renewalDate)}</span>
+            <span className={expiredIds.has(a.id) ? "font-medium text-red-600" : ""}>Renueva {formatDate(a.renewalDate)}
+              {a.costAmount ? ` · ${formatARS(decToCents(a.costAmount))} ${a.costEveryMonths === 1 ? "por mes" : `cada ${a.costEveryMonths} meses`}` : ""}
+            </span>
           </li>
         ))}
       </ul>

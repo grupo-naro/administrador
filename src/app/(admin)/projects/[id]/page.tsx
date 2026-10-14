@@ -4,6 +4,7 @@ import { InfraSection } from "@/components/project/infra-section";
 import { PortalSection } from "@/components/project/portal-section";
 import { ProjectHeader } from "@/components/project/project-header";
 import { getProjectBilling } from "@/server/billing/queries";
+import { decToCents } from "@/server/mappers";
 import { getProject } from "@/server/projects/queries";
 
 export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
@@ -29,7 +30,19 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
         }}
         plans={plans}
       />
-      <InfraSection projectId={project.id} assets={project.assets} />
+      <InfraSection
+        projectId={project.id}
+        assets={project.assets.map((a) => ({
+          id: a.id,
+          type: a.type,
+          provider: a.provider,
+          identifier: a.identifier,
+          renewalDate: a.renewalDate,
+          managedByNaro: a.managedByNaro,
+          costCents: a.costAmount ? decToCents(a.costAmount) : null,
+          costEveryMonths: a.costEveryMonths,
+        }))}
+      />
       <PortalSection projectId={project.id} 
         tokens={project.tokens.map((t) => ({ id: t.id, createdAt: t.createdAt, lastViewedAt: t.lastViewedAt }))}
       />

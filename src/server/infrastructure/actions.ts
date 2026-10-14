@@ -14,6 +14,7 @@ const schema = z.object({
   renewalDate: dateField("Fecha de renovación inválida"),
   managedByNaro: z.enum(["true", "false"]),
   cost: optMoney,
+  costEveryMonths: z.enum(["1", "3", "6", "12"]),
 });
 
 export async function createAsset(projectId: string, _prev: ActionState, fd: FormData): Promise<ActionState> {
@@ -22,13 +23,14 @@ export async function createAsset(projectId: string, _prev: ActionState, fd: For
   if (!parsed.ok) return fail(parsed.error);
   const project = await prisma.project.findUnique({ where: { id: projectId }, select: { id: true } });
   if (!project) return fail("El proyecto no existe");
-  const { managedByNaro, cost, ...rest } = parsed.data;
+  const { managedByNaro, cost, costEveryMonths, ...rest } = parsed.data;
   await prisma.infrastructureAsset.create({
     data: {
       ...rest,
       projectId,
       managedByNaro: managedByNaro === "true",
       costAmount: cost ? centsToDec(cost) : undefined,
+      costEveryMonths: Number(costEveryMonths),
     },
   });
   revalidatePath(`/projects/${projectId}`);

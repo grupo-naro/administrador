@@ -1,6 +1,7 @@
 import { ActionForm } from "@/components/action-form";
 import { Field, SelectField } from "@/components/fields";
 import { formatDate } from "@/domain/dates";
+import { formatARS } from "@/domain/money";
 import { ASSET_LABEL } from "@/lib/labels";
 import { createAsset, deleteAsset } from "@/server/infrastructure/actions";
 
@@ -9,7 +10,7 @@ export function InfraSection({
   assets,
 }: {
   projectId: string;
-  assets: { id: string; type: keyof typeof ASSET_LABEL; provider: string; identifier: string; renewalDate: Date; managedByNaro: boolean }[];
+  assets: { id: string; type: keyof typeof ASSET_LABEL; provider: string; identifier: string; renewalDate: Date; managedByNaro: boolean; costCents: number | null; costEveryMonths: number }[];
 }) {
   return (
     <section className="space-y-4">
@@ -20,6 +21,7 @@ export function InfraSection({
           <li key={a.id} className="flex flex-wrap items-center justify-between gap-2 p-3 text-sm">
             <span>
               {ASSET_LABEL[a.type]} · {a.identifier} · {a.provider} · {a.managedByNaro ? "Gestiona Naro" : "Gestiona el cliente"}
+              {a.costCents ? ` · ${formatARS(a.costCents)} ${a.costEveryMonths === 1 ? "por mes" : `cada ${a.costEveryMonths} meses`}` : ""}
             </span>
             <span className="flex items-center gap-3">
               Renueva {formatDate(a.renewalDate)}
@@ -41,6 +43,17 @@ export function InfraSection({
             options={[{ value: "true", label: "Grupo Naro" }, { value: "false", label: "Cliente" }]}
           />
           <Field label="Costo (ARS, opcional)" name="cost" type="number" step="0.01" />
+          <SelectField
+            label="Se paga cada"
+            name="costEveryMonths"
+            defaultValue="12"
+            options={[
+              { value: "1", label: "1 mes" },
+              { value: "3", label: "3 meses" },
+              { value: "6", label: "6 meses" },
+              { value: "12", label: "12 meses (anual)" },
+            ]}
+          />
         </ActionForm>
       </details>
     </section>
