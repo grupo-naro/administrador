@@ -4,10 +4,11 @@ import { toDateInput, todayAR, formatDate } from "@/domain/dates";
 import { BATCH_SIZE, needsExtension } from "@/domain/installments";
 import { installmentLabel } from "@/domain/labels";
 import { formatARS } from "@/domain/money";
-import { PAYMENT_METHODS, PLAN_LABEL, STATUS_CLASS, STATUS_LABEL } from "@/lib/labels";
+import { PAYMENT_METHODS, PLAN_LABEL, SCHEME_LABEL, STATUS_CLASS, STATUS_LABEL } from "@/lib/labels";
 import type { InstallmentRow, PlanRow } from "@/server/billing/queries";
 import {
   activateMaintenance,
+  changeDevelopmentScheme,
   createDevelopmentPlan,
   createSubscriptionPlan,
   deletePayment,
@@ -20,6 +21,7 @@ import {
   updateInstallment,
 } from "@/server/billing/actions";
 import { setProjectStage } from "@/server/projects/actions";
+import { DevelopmentPlanFields } from "./development-plan-fields";
 
 export interface BillingProject {
   id: string;
@@ -92,15 +94,16 @@ export function BillingSection({ project, plans }: { project: BillingProject; pl
   const hasDev = plans.some((p) => p.kind === "DESARROLLO");
   const hasSub = plans.some((p) => p.kind === "SUSCRIPCION");
   const dev = plans.find((p) => p.kind === "DESARROLLO");
-  const anticipoPaid = dev?.installments.find((i) => i.type === "ANTICIPO")?.status === "PAGADO";
+  // Primer pago del plan (anticipo o pago total): habilita el inicio del desarrollo.
+  const firstPaid = dev?.installments.find((i) => i.sequence === 1)?.status === "PAGADO";
 
   return (
     <section className="space-y-6">
       <h2 className="text-xl font-semibold">Cobros</h2>
 
-      {project.stage === "COTIZACION" && anticipoPaid && (
+      {project.stage === "COTIZACION" && firstPaid && (
         <div className="flex flex-wrap items-center gap-3 rounded-xl border border-green-300 bg-green-50 p-3 text-sm">
-          <span>Anticipo cobrado: ya se puede iniciar el desarrollo.</span>
+          <span>Primer pago cobrado: ya se puede iniciar el desarrollo.</span>
           <ActionForm action={setProjectStage.bind(null, project.id)} submitLabel="Pasar a En Desarrollo" className="flex items-center gap-2">
             <input type="hidden" name="stage" value="EN_DESARROLLO" />
           </ActionForm>
@@ -109,12 +112,9 @@ export function BillingSection({ project, plans }: { project: BillingProject; pl
 
       {project.contractType === "PAGO_UNICO" && !hasDev && (
         <div className="max-w-md space-y-2 rounded-xl border bg-card p-4">
-          <h3 className="font-medium">Crear plan de cobros (50% anticipo + cuotas)</h3>
+          <h3 className="font-medium">Crear plan de cobros</h3>
           <ActionForm action={createDevelopmentPlan.bind(null, project.id)} submitLabel="Crear plan">
-            <Field label="Total (ARS)" name="total" type="number" step="0.01" defaultValue={centsToInput(project.totalCents)} required />
-            <SelectField label="Cuotas del 50% restante" name="count" options={[{ value: "2", label: "2 cuotas" }, { value: "3", label: "3 cuotas" }]} />
-            <Field label="Fecha del anticipo" name="startDate" type="date" defaultValue={toDateInput(todayAR())} required />
-            <IntervalFields legend="Vencimiento de las cuotas" />
+            <DevelopmentPlanFields defaultTotal={centsToInput(project.totalCents)} defaultStartDate={toDateInput(todayAR())} />
           </ActionForm>
         </div>
       )}
@@ -132,7 +132,10 @@ export function BillingSection({ project, plans }: { project: BillingProject; pl
 
       {plans.map((plan) => (
         <div key={plan.id} className="space-y-2">
-          <h3 className="text-lg font-medium">{PLAN_LABEL[plan.kind]}</h3>
+          <h3 className="text-lg font-medium">
+            {PLAN_LABEL[plan.kind]}
+            {plan.kind === "DESARROLLO" && plan.scheme ? ` · ${SCHEME_LABEL[plan.scheme]}` : ""}
+          </h3>
           <p className="text-sm text-muted-foreground">
             Total {formatARS(plan.summary.totalCents)} · Abonado {formatARS(plan.summary.paidCents)} · Saldo{" "}
             {formatARS(plan.summary.pendingCents)}
@@ -203,6 +206,32 @@ export function BillingSection({ project, plans }: { project: BillingProject; pl
                 </details>
               );
             })()}
+          {plan.kind === "DESARROLLO" && (
+            <details className="rounded-xl border bg-card p-3">
+              <summary className="cursor-pointer text-sm font-medium">Cambiar forma de pago</summary>
+              <ActionForm
+                action={changeDevelopmentScheme.bind(null, project.id)}
+                submitLabel="Cambiar forma de pago"
+                className="mt-2 max-w-md space-y-3"
+              >
+                <DevelopmentPlanFields
+                  defaultScheme={plan.scheme ?? undefined}
+                  defaultTotal={centsToInput(plan.summary.totalCents)}
+                  defaultStartDate={toDateInput(plan.installments.find((i) => i.sequence === 1)?.dueDate ?? todayAR())}
+                  defaultDeliveryDate={(() => {
+                    const saldo = plan.installments.find((i) => i.type === "SALDO_ENTREGA");
+                    return saldo ? toDateInput(saldo.dueDate) : undefined;
+                  })()}
+                  startDateHint="Si el anticipo ya tiene pagos se conserva tal cual (monto, fecha y pagos) y el resto se arma sobre el total menos el anticipo; esta fecha se usa como base para las nuevas cuotas."
+                />
+                <p className="text-xs text-muted-foreground">
+                  Sin pagos registrados se rehace todo el plan. Si hay pagos en cuotas distintas del anticipo, o se elige &quot;Todo junto&quot;
+                  con el anticipo ya cobrado, no se puede cambiar.
+                </p>
+                <ConfirmCheckbox warning="Se reemplazarán las cuotas sin pagos del plan de desarrollo." />
+              </ActionForm>
+            </details>
+          )}
           {plan.kind !== "DESARROLLO" && !(plan.kind === "MANTENIMIENTO" && project.maintenanceEnded) && (
             <div className="grid gap-4 md:grid-cols-2">
               <details className="rounded-xl border bg-card p-3">

@@ -28,7 +28,7 @@ export default async function ProposalPage({ params }: { params: Promise<{ id: s
         <div className="rounded-xl border bg-card p-4">
           <p className="text-sm text-muted-foreground">{monthly ? "Opción A — Pago Único" : "Pago Único"}</p>
           <p className="text-xl font-semibold">{formatARS(oneTime)}</p>
-          <p className="text-xs text-muted-foreground">50% de anticipo + resto en 2 o 3 cuotas</p>
+          <p className="text-xs text-muted-foreground">Anticipo + cuotas, 50% y 50% al entregar, o todo junto</p>
         </div>
         {monthly && (
           <div className="rounded-xl border bg-card p-4">

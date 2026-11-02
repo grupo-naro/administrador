@@ -12,6 +12,11 @@ export const PLAN_LABEL = {
   SUSCRIPCION: "Suscripción",
   MANTENIMIENTO: "Mantenimiento",
 } as const;
+export const SCHEME_LABEL = {
+  ANTICIPO_CUOTAS: "50% anticipo + cuotas",
+  CONTADO: "Todo junto",
+  MITAD_ENTREGA: "50% ahora + 50% al entregar",
+} as const;
 export const STATUS_LABEL = { PENDIENTE: "Pendiente", PAGADO: "Pagado", VENCIDO: "Vencido" } as const;
 export const STATUS_CLASS = {
   PENDIENTE: "bg-amber-50 text-amber-700",

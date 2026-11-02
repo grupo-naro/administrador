@@ -1,6 +1,6 @@
 import "server-only";
 import { todayAR } from "@/domain/dates";
-import type { InstallmentType } from "@/domain/installments";
+import type { DevelopmentScheme, InstallmentType } from "@/domain/installments";
 import type { PlanKind } from "@/domain/portal";
 import { installmentStatus, summarize, type ComputedStatus } from "@/domain/status";
 import { prisma } from "@/lib/prisma";
@@ -27,6 +27,8 @@ export interface InstallmentRow {
 export interface PlanRow {
   id: string;
   kind: PlanKind;
+  /** Forma de pago (solo planes de desarrollo). */
+  scheme: DevelopmentScheme | null;
   installments: InstallmentRow[];
   summary: { totalCents: number; paidCents: number; pendingCents: number };
 }
@@ -65,6 +67,6 @@ export async function getProjectBilling(projectId: string, today = todayAR()): P
         payments,
       };
     });
-    return { id: plan.id, kind: plan.kind, installments, summary: summarize(installments) };
+    return { id: plan.id, kind: plan.kind, scheme: plan.scheme, installments, summary: summarize(installments) };
   });
 }
