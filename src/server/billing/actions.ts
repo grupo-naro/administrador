@@ -11,17 +11,21 @@ import { isRecordNotFound, isUniqueViolation } from "@/lib/prisma-errors";
 import { todayAR } from "@/domain/dates";
 import {
   BATCH_SIZE,
-  planOneTime,
+  planDevelopment,
   planRecurring,
   planReschedule,
   planSubscription,
   repriceInstallments,
   resumeStartSequence,
+  planSchemeChange,
+  type DevelopmentInput,
+  type DevelopmentScheme,
   type InstallmentDraft,
   type Interval,
 } from "@/domain/installments";
 import { assertPayable, remainingCents } from "@/domain/status";
 import { centsToDec, decToCents } from "@/server/mappers";
+import { lockPlanInstallments } from "./locks";
 import { recalcInstallment } from "./recalc";
 
 const toCreate = (d: InstallmentDraft) => ({
@@ -36,10 +40,6 @@ class BillingError extends Error {}
 /** Bloquea la fila de la cuota hasta el fin de la transacción (evita check-then-act concurrente). */
 const lockInstallment = (tx: Prisma.TransactionClient, id: string) =>
   tx.$queryRaw`SELECT 1 FROM "Installment" WHERE id = ${id} FOR UPDATE`;
-
-/** Bloquea todas las cuotas de un plan, en orden estable (mismo orden en todas las rutas => sin deadlocks). */
-const lockPlanInstallments = (tx: Prisma.TransactionClient, planId: string) =>
-  tx.$queryRaw`SELECT id FROM "Installment" WHERE "planId" = ${planId} ORDER BY id FOR UPDATE`;
 
 /** Serializa baja/reanudación del mantenimiento aunque el plan no tenga cuotas que bloquear (siempre después de las cuotas). */
 const lockProject = (tx: Prisma.TransactionClient, projectId: string) =>
@@ -57,33 +57,64 @@ const intervalFields = {
 };
 const toInterval = (d: { every: string; unit: Interval["unit"] }): Interval => ({ every: Number(d.every), unit: d.unit });
 
-export async function createDevelopmentPlan(projectId: string, _prev: ActionState, fd: FormData): Promise<ActionState> {
-  await requireAdmin();
-  const parsed = parseForm(
-    z.object({ total: money("Total inválido"), count: z.enum(["2", "3"]), startDate: dateField(), ...intervalFields }),
+const DEVELOPMENT_SCHEMES = ["ANTICIPO_CUOTAS", "CONTADO", "MITAD_ENTREGA"] as const satisfies readonly DevelopmentScheme[];
+
+/**
+ * Campos comunes de "Crear plan" y "Cambiar forma de pago". Cantidad de cuotas y frecuencia solo se validan
+ * para ANTICIPO_CUOTAS, y la fecha de entrega solo para MITAD_ENTREGA; en las otras formas se ignoran.
+ */
+function parseDevelopmentForm(fd: FormData): { ok: true; data: DevelopmentInput } | { ok: false; error: string } {
+  const base = parseForm(
+    z.object({
+      total: money("Total inválido"),
+      startDate: dateField(),
+      scheme: z.enum(DEVELOPMENT_SCHEMES, { error: "Elegí una forma de pago válida" }).default("ANTICIPO_CUOTAS"),
+    }),
     fd,
   );
+  if (!base.ok) return base;
+  const { total, startDate, scheme } = base.data;
+  const data: DevelopmentInput = { scheme, totalCents: total, startDate };
+  if (scheme === "ANTICIPO_CUOTAS") {
+    const extra = parseForm(z.object({ count: z.enum(["2", "3"], { error: "Las cuotas deben ser 2 o 3" }), ...intervalFields }), fd);
+    if (!extra.ok) return extra;
+    data.count = Number(extra.data.count);
+    data.interval = toInterval(extra.data);
+  } else if (scheme === "MITAD_ENTREGA") {
+    const extra = parseForm(z.object({ deliveryDate: dateField("Ingresá la fecha estimada de entrega") }), fd);
+    if (!extra.ok) return extra;
+    data.deliveryDate = extra.data.deliveryDate;
+  }
+  return { ok: true, data };
+}
+
+const installmentCountOf = (d: DevelopmentInput) => (d.scheme === "ANTICIPO_CUOTAS" ? (d.count ?? null) : null);
+
+export async function createDevelopmentPlan(projectId: string, _prev: ActionState, fd: FormData): Promise<ActionState> {
+  await requireAdmin();
+  const parsed = parseDevelopmentForm(fd);
   if (!parsed.ok) return fail(parsed.error);
   const project = await prisma.project.findUnique({ where: { id: projectId }, include: { plans: true } });
   if (!project) return fail("Proyecto no encontrado");
   if (project.contractType !== "PAGO_UNICO") return fail("El proyecto no es de Pago Único");
   if (project.plans.some((p) => p.kind === "DESARROLLO")) return fail("Ya existe un plan de desarrollo");
-  const { total, count, startDate } = parsed.data;
+  const input = parsed.data;
   let drafts: InstallmentDraft[];
   try {
-    drafts = planOneTime({ totalCents: total, count: Number(count), startDate, interval: toInterval(parsed.data) });
+    drafts = planDevelopment(input);
   } catch (e) {
     return fail((e as Error).message);
   }
   try {
     await prisma.$transaction([
-      prisma.project.update({ where: { id: projectId }, data: { totalAmount: centsToDec(total) } }),
+      prisma.project.update({ where: { id: projectId }, data: { totalAmount: centsToDec(input.totalCents) } }),
       prisma.installmentPlan.create({
         data: {
           projectId,
           kind: "DESARROLLO",
-          totalAmount: centsToDec(total),
-          installmentCount: Number(count),
+          scheme: input.scheme,
+          totalAmount: centsToDec(input.totalCents),
+          installmentCount: installmentCountOf(input),
           installments: { create: drafts.map(toCreate) },
         },
       }),
@@ -147,6 +178,65 @@ export async function reschedulePlan(projectId: string, _prev: ActionState, fd: 
   }
   refresh(projectId);
   return { message: `Se reprogramaron ${updated} cuota(s)` };
+}
+
+/**
+ * Cambia la forma de pago del plan de desarrollo. Sin pagos rehace el plan; si solo el anticipo tiene pagos y la
+ * nueva forma conserva anticipo, lo deja igual y regenera el resto. Las reglas viven en `planSchemeChange`.
+ */
+export async function changeDevelopmentScheme(projectId: string, _prev: ActionState, fd: FormData): Promise<ActionState> {
+  await requireAdmin();
+  if (!confirmed(fd)) return fail(CONFIRM_ERROR);
+  const parsed = parseDevelopmentForm(fd);
+  if (!parsed.ok) return fail(parsed.error);
+  const plan = await prisma.installmentPlan.findUnique({
+    where: { projectId_kind: { projectId, kind: "DESARROLLO" } },
+    select: { id: true },
+  });
+  if (!plan) return fail("El proyecto no tiene plan de desarrollo");
+  const input = parsed.data;
+  try {
+    await prisma.$transaction(async (tx) => {
+      // Mismo bloqueo que registerPayment/deletePayment: los pagos se vuelven a leer bajo el bloqueo.
+      await lockPlanInstallments(tx, plan.id);
+      const installments = await tx.installment.findMany({
+        where: { planId: plan.id },
+        include: { payments: { select: { amount: true } } },
+      });
+      let change: ReturnType<typeof planSchemeChange>;
+      try {
+        change = planSchemeChange({
+          ...input,
+          current: installments.map((i) => ({
+            type: i.type,
+            sequence: i.sequence,
+            amountCents: decToCents(i.amount),
+            paidCents: i.payments.reduce((s, p) => s + decToCents(p.amount), 0),
+          })),
+        });
+      } catch (e) {
+        throw new BillingError((e as Error).message);
+      }
+      // Bajo el bloqueo solo el anticipo conservado puede tener pagos; todo lo demás se reemplaza.
+      await tx.installment.deleteMany({ where: { planId: plan.id, payments: { none: {} } } });
+      await tx.installment.createMany({ data: change.drafts.map((d) => ({ planId: plan.id, ...toCreate(d) })) });
+      await tx.installmentPlan.update({
+        where: { id: plan.id },
+        data: {
+          scheme: input.scheme,
+          totalAmount: centsToDec(input.totalCents),
+          installmentCount: installmentCountOf(input),
+        },
+      });
+      await tx.project.update({ where: { id: projectId }, data: { totalAmount: centsToDec(input.totalCents) } });
+    });
+  } catch (e) {
+    if (e instanceof BillingError) return fail(e.message);
+    if (isUniqueViolation(e)) return fail("El plan cambió, recargá la página");
+    throw e;
+  }
+  refresh(projectId);
+  return { message: "Forma de pago actualizada" };
 }
 
 export async function createSubscriptionPlan(projectId: string, _prev: ActionState, fd: FormData): Promise<ActionState> {

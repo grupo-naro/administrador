@@ -1,6 +1,16 @@
 import { addMonths } from "./dates";
 
-export type InstallmentType = "ANTICIPO" | "CUOTA" | "PRIMER_PAGO" | "MENSUAL" | "MANTENIMIENTO";
+export type InstallmentType =
+  | "ANTICIPO"
+  | "CUOTA"
+  | "PRIMER_PAGO"
+  | "MENSUAL"
+  | "MANTENIMIENTO"
+  | "PAGO_TOTAL"
+  | "SALDO_ENTREGA";
+
+/** Forma de pago de un plan de desarrollo (Pago Único). */
+export type DevelopmentScheme = "ANTICIPO_CUOTAS" | "CONTADO" | "MITAD_ENTREGA";
 
 export interface InstallmentDraft {
   type: InstallmentType;
@@ -49,22 +59,113 @@ export function planOneTime(a: {
   interval?: Interval;
 }): InstallmentDraft[] {
   assertPositive(a.totalCents, "El total");
-  if (a.count !== 2 && a.count !== 3) throw new Error("Las cuotas deben ser 2 o 3");
+  assertCount(a.count);
   const anticipo = Math.round(a.totalCents / 2);
-  const remaining = a.totalCents - anticipo;
-  const base = Math.floor(remaining / a.count);
-  const drafts: InstallmentDraft[] = [
+  return [
     { type: "ANTICIPO", sequence: 1, amountCents: anticipo, dueDate: a.startDate },
+    ...splitCuotas(a.totalCents - anticipo, a.count, a.startDate, a.interval ?? MONTHLY),
   ];
-  for (let i = 1; i <= a.count; i++) {
-    drafts.push({
-      type: "CUOTA",
+}
+
+function assertCount(count: number | undefined): asserts count is 2 | 3 {
+  if (count !== 2 && count !== 3) throw new Error("Las cuotas deben ser 2 o 3");
+}
+
+/** `count` cuotas (secuencias 2..count+1) que suman `remaining`; el sobrante va a la última. La cuota i vence i períodos después de `base`. */
+function splitCuotas(remaining: number, count: number, base: Date, interval: Interval): InstallmentDraft[] {
+  const each = Math.floor(remaining / count);
+  return Array.from({ length: count }, (_, k) => {
+    const i = k + 1;
+    return {
+      type: "CUOTA" as const,
       sequence: i + 1,
-      amountCents: i === a.count ? remaining - base * (a.count - 1) : base,
-      dueDate: addInterval(a.startDate, a.interval ?? MONTHLY, i),
-    });
+      amountCents: i === count ? remaining - each * (count - 1) : each,
+      dueDate: addInterval(base, interval, i),
+    };
+  });
+}
+
+function saldoEntrega(amountCents: number, startDate: Date, deliveryDate: Date | null | undefined): InstallmentDraft {
+  if (!deliveryDate) throw new Error("Ingresá la fecha estimada de entrega");
+  if (deliveryDate.getTime() < startDate.getTime()) {
+    throw new Error("La entrega estimada no puede ser anterior al anticipo");
   }
-  return drafts;
+  return { type: "SALDO_ENTREGA", sequence: 2, amountCents, dueDate: deliveryDate };
+}
+
+export interface DevelopmentInput {
+  scheme: DevelopmentScheme;
+  totalCents: number;
+  /** Fecha del anticipo (o del pago único si es "Todo junto"). */
+  startDate: Date;
+  /** Solo ANTICIPO_CUOTAS: 2 o 3. */
+  count?: number;
+  /** Solo ANTICIPO_CUOTAS. */
+  interval?: Interval;
+  /** Solo MITAD_ENTREGA: fecha estimada de entrega. */
+  deliveryDate?: Date | null;
+}
+
+/** Cuotas del plan de desarrollo según la forma de pago elegida. */
+export function planDevelopment(a: DevelopmentInput): InstallmentDraft[] {
+  assertPositive(a.totalCents, "El total");
+  switch (a.scheme) {
+    case "ANTICIPO_CUOTAS":
+      assertCount(a.count);
+      return planOneTime({ totalCents: a.totalCents, count: a.count, startDate: a.startDate, interval: a.interval });
+    case "CONTADO":
+      return [{ type: "PAGO_TOTAL", sequence: 1, amountCents: a.totalCents, dueDate: a.startDate }];
+    case "MITAD_ENTREGA": {
+      const anticipo = Math.round(a.totalCents / 2);
+      return [
+        { type: "ANTICIPO", sequence: 1, amountCents: anticipo, dueDate: a.startDate },
+        saldoEntrega(a.totalCents - anticipo, a.startDate, a.deliveryDate),
+      ];
+    }
+  }
+}
+
+export const SCHEME_CHANGE_BLOCKED =
+  "No se puede cambiar la forma de pago: ya hay pagos registrados en cuotas que se reemplazarían. Quitá esos pagos o editá las cuotas a mano.";
+
+/**
+ * Cambio de forma de pago de un plan de desarrollo existente.
+ * - Sin pagos en ninguna cuota: se rehace el plan completo (`keepAnticipo = false`).
+ * - Solo el anticipo (secuencia 1) tiene pagos y la nueva forma conserva anticipo: el anticipo queda igual y
+ *   se regenera el resto sobre `total − anticipo` desde la secuencia 2 (`keepAnticipo = true`).
+ * - Cualquier otro caso con pagos: error.
+ */
+export function planSchemeChange(
+  a: DevelopmentInput & {
+    current: { type: InstallmentType; sequence: number; amountCents: number; paidCents: number }[];
+  },
+): { keepAnticipo: boolean; drafts: InstallmentDraft[] } {
+  assertPositive(a.totalCents, "El total");
+  const withPayments = a.current.filter((i) => i.paidCents > 0);
+  if (withPayments.length === 0) return { keepAnticipo: false, drafts: planDevelopment(a) };
+  const anticipo = withPayments.length === 1 && withPayments[0].type === "ANTICIPO" && withPayments[0].sequence === 1
+    ? withPayments[0]
+    : null;
+  if (!anticipo || a.scheme === "CONTADO") throw new Error(SCHEME_CHANGE_BLOCKED);
+  if (a.totalCents <= anticipo.amountCents) {
+    throw new Error("El total debe ser mayor al anticipo ya registrado");
+  }
+  const remaining = a.totalCents - anticipo.amountCents;
+  if (a.scheme === "ANTICIPO_CUOTAS") {
+    assertCount(a.count);
+    return { keepAnticipo: true, drafts: splitCuotas(remaining, a.count, a.startDate, a.interval ?? MONTHLY) };
+  }
+  return { keepAnticipo: true, drafts: [saldoEntrega(remaining, a.startDate, a.deliveryDate)] };
+}
+
+/** Al entregar el proyecto: las cuotas SALDO_ENTREGA sin pagos pasan a vencer en la fecha de entrega. */
+export function deliveryDueUpdates(
+  items: { id: string; type: InstallmentType; paidCents: number }[],
+  deliveredAt: Date,
+): { id: string; dueDate: Date }[] {
+  return items
+    .filter((i) => i.type === "SALDO_ENTREGA" && i.paidCents === 0)
+    .map((i) => ({ id: i.id, dueDate: deliveredAt }));
 }
 
 /**

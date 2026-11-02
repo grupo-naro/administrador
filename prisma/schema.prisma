@@ -38,6 +38,13 @@ enum InstallmentType {
   PRIMER_PAGO
   MENSUAL
   MANTENIMIENTO
+  PAGO_TOTAL
+  SALDO_ENTREGA
+}
+enum DevelopmentScheme {
+  ANTICIPO_CUOTAS
+  CONTADO
+  MITAD_ENTREGA
 }
 enum InstallmentStatus {
   PENDIENTE
@@ -124,7 +131,9 @@ model InstallmentPlan {
   kind             PlanKind
   totalAmount      Decimal?      @db.Decimal(14, 2)
   installmentCount Int?
-  createdAt        DateTime      @default(now())
+  /// Forma de pago del plan de desarrollo (null en suscripción y mantenimiento).
+  scheme           DevelopmentScheme?
+  createdAt       DateTime      @default(now())
   installments     Installment[]
 
   @@unique([projectId, kind])

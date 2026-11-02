@@ -3,10 +3,13 @@ import { parseDateInput as d, toDateInput } from "./dates";
 import {
   BATCH_SIZE,
   addInterval,
+  deliveryDueUpdates,
   needsExtension,
+  planDevelopment,
   planOneTime,
   planRecurring,
   planReschedule,
+  planSchemeChange,
   planSubscription,
   repriceInstallments,
   resumeStartSequence,
@@ -204,5 +207,167 @@ describe("planReschedule", () => {
 
   it("valida la frecuencia", () => {
     expect(() => planReschedule([], d("2026-12-01"), { every: 0, unit: "dias" })).toThrow("entero mayor a cero");
+  });
+});
+
+describe("planDevelopment", () => {
+  const start = d("2026-11-10");
+
+  it("ANTICIPO_CUOTAS es igual a planOneTime", () => {
+    const interval = { every: 15, unit: "dias" } as const;
+    expect(planDevelopment({ scheme: "ANTICIPO_CUOTAS", totalCents: 100_001, startDate: start, count: 3, interval })).toEqual(
+      planOneTime({ totalCents: 100_001, count: 3, startDate: start, interval }),
+    );
+  });
+
+  it("CONTADO: un único pago total en la fecha de pago", () => {
+    const plan = planDevelopment({ scheme: "CONTADO", totalCents: 100_001, startDate: start, count: 9 });
+    expect(plan).toEqual([{ type: "PAGO_TOTAL", sequence: 1, amountCents: 100_001, dueDate: start }]);
+  });
+
+  it("MITAD_ENTREGA: anticipo + saldo al entregar, centavo impar al anticipo", () => {
+    const plan = planDevelopment({
+      scheme: "MITAD_ENTREGA",
+      totalCents: 100_001,
+      startDate: start,
+      deliveryDate: d("2027-01-15"),
+      count: 9,
+    });
+    expect(plan.map((p) => [p.type, p.sequence, p.amountCents])).toEqual([
+      ["ANTICIPO", 1, 50_001],
+      ["SALDO_ENTREGA", 2, 50_000],
+    ]);
+    expect(dates(plan)).toEqual(["2026-11-10", "2027-01-15"]);
+    expect(sum(plan)).toBe(100_001);
+  });
+
+  it("MITAD_ENTREGA acepta la entrega el mismo día del anticipo", () => {
+    const plan = planDevelopment({ scheme: "MITAD_ENTREGA", totalCents: 1_000, startDate: start, deliveryDate: start });
+    expect(dates(plan)).toEqual(["2026-11-10", "2026-11-10"]);
+  });
+
+  it("rechaza entrega anterior al anticipo, falta de entrega y cantidades inválidas", () => {
+    expect(() =>
+      planDevelopment({ scheme: "MITAD_ENTREGA", totalCents: 1_000, startDate: start, deliveryDate: d("2026-11-09") }),
+    ).toThrow("La entrega estimada no puede ser anterior al anticipo");
+    expect(() => planDevelopment({ scheme: "MITAD_ENTREGA", totalCents: 1_000, startDate: start })).toThrow(
+      "fecha estimada de entrega",
+    );
+    expect(() => planDevelopment({ scheme: "ANTICIPO_CUOTAS", totalCents: 1_000, startDate: start, count: 4 })).toThrow("2 o 3");
+    expect(() => planDevelopment({ scheme: "ANTICIPO_CUOTAS", totalCents: 1_000, startDate: start })).toThrow("2 o 3");
+    expect(() => planDevelopment({ scheme: "CONTADO", totalCents: 0, startDate: start })).toThrow("mayor a cero");
+  });
+});
+
+describe("planSchemeChange", () => {
+  const start = d("2026-12-01");
+  const current = (paid: Partial<Record<number, number>> = {}) => [
+    { type: "ANTICIPO" as const, sequence: 1, amountCents: 50_000, paidCents: paid[1] ?? 0 },
+    { type: "CUOTA" as const, sequence: 2, amountCents: 25_000, paidCents: paid[2] ?? 0 },
+    { type: "CUOTA" as const, sequence: 3, amountCents: 25_000, paidCents: paid[3] ?? 0 },
+  ];
+
+  it("sin pagos rehace el plan completo con el nuevo total", () => {
+    const r = planSchemeChange({ current: current(), scheme: "CONTADO", totalCents: 120_000, startDate: start });
+    expect(r.keepAnticipo).toBe(false);
+    expect(r.drafts).toEqual([{ type: "PAGO_TOTAL", sequence: 1, amountCents: 120_000, dueDate: start }]);
+  });
+
+  it("anticipo pagado: se conserva y las cuotas se arman sobre total − anticipo desde la secuencia 2", () => {
+    const r = planSchemeChange({
+      current: current({ 1: 50_000 }),
+      scheme: "ANTICIPO_CUOTAS",
+      totalCents: 110_000,
+      startDate: start,
+      count: 3,
+    });
+    expect(r.keepAnticipo).toBe(true);
+    expect(r.drafts.map((x) => [x.type, x.sequence, x.amountCents])).toEqual([
+      ["CUOTA", 2, 20_000],
+      ["CUOTA", 3, 20_000],
+      ["CUOTA", 4, 20_000],
+    ]);
+    expect(dates(r.drafts)).toEqual(["2027-01-01", "2027-02-01", "2027-03-01"]);
+  });
+
+  it("anticipo con pago parcial: se conserva y el saldo al entregar es total − anticipo completo", () => {
+    const r = planSchemeChange({
+      current: current({ 1: 10_000 }),
+      scheme: "MITAD_ENTREGA",
+      totalCents: 100_001,
+      startDate: start,
+      deliveryDate: d("2027-02-01"),
+    });
+    expect(r.keepAnticipo).toBe(true);
+    expect(r.drafts).toEqual([{ type: "SALDO_ENTREGA", sequence: 2, amountCents: 50_001, dueDate: d("2027-02-01") }]);
+  });
+
+  it("rechaza si hay pagos en cuotas que se reemplazarían", () => {
+    const blocked = "No se puede cambiar la forma de pago";
+    expect(() =>
+      planSchemeChange({ current: current({ 2: 100 }), scheme: "ANTICIPO_CUOTAS", totalCents: 100_000, startDate: start, count: 2 }),
+    ).toThrow(blocked);
+    expect(() =>
+      planSchemeChange({
+        current: [
+          { type: "ANTICIPO", sequence: 1, amountCents: 50_000, paidCents: 50_000 },
+          { type: "SALDO_ENTREGA", sequence: 2, amountCents: 50_000, paidCents: 1 },
+        ],
+        scheme: "ANTICIPO_CUOTAS",
+        totalCents: 100_000,
+        startDate: start,
+        count: 2,
+      }),
+    ).toThrow(blocked);
+    expect(() =>
+      planSchemeChange({
+        current: [{ type: "PAGO_TOTAL", sequence: 1, amountCents: 100_000, paidCents: 100 }],
+        scheme: "MITAD_ENTREGA",
+        totalCents: 100_000,
+        startDate: start,
+        deliveryDate: start,
+      }),
+    ).toThrow(blocked);
+  });
+
+  it("rechaza pasar a Todo junto con el anticipo pagado", () => {
+    expect(() =>
+      planSchemeChange({ current: current({ 1: 50_000 }), scheme: "CONTADO", totalCents: 100_000, startDate: start }),
+    ).toThrow("No se puede cambiar la forma de pago");
+  });
+
+  it("rechaza un total que no supera al anticipo conservado", () => {
+    expect(() =>
+      planSchemeChange({ current: current({ 1: 50_000 }), scheme: "ANTICIPO_CUOTAS", totalCents: 50_000, startDate: start, count: 2 }),
+    ).toThrow("mayor al anticipo");
+  });
+
+  it("valida la nueva forma de pago aunque se conserve el anticipo", () => {
+    expect(() =>
+      planSchemeChange({ current: current({ 1: 50_000 }), scheme: "MITAD_ENTREGA", totalCents: 100_000, startDate: start }),
+    ).toThrow("fecha estimada de entrega");
+    expect(() =>
+      planSchemeChange({
+        current: current({ 1: 50_000 }),
+        scheme: "MITAD_ENTREGA",
+        totalCents: 100_000,
+        startDate: start,
+        deliveryDate: d("2026-11-30"),
+      }),
+    ).toThrow("anterior al anticipo");
+  });
+});
+
+describe("deliveryDueUpdates", () => {
+  it("mueve solo los saldos al entregar sin pagos", () => {
+    const delivered = d("2026-12-20");
+    const items = [
+      { id: "a", type: "ANTICIPO" as const, paidCents: 0 },
+      { id: "s1", type: "SALDO_ENTREGA" as const, paidCents: 0 },
+      { id: "s2", type: "SALDO_ENTREGA" as const, paidCents: 100 },
+      { id: "c", type: "CUOTA" as const, paidCents: 0 },
+      { id: "t", type: "PAGO_TOTAL" as const, paidCents: 0 },
+    ];
+    expect(deliveryDueUpdates(items, delivered)).toEqual([{ id: "s1", dueDate: delivered }]);
   });
 });

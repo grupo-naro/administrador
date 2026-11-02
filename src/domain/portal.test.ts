@@ -12,6 +12,8 @@ describe("installmentLabel", () => {
     expect(installmentLabel("PRIMER_PAGO", 1)).toBe("Primer pago");
     expect(installmentLabel("MENSUAL", 3)).toBe("Mes 3");
     expect(installmentLabel("MANTENIMIENTO", 2)).toBe("Mantenimiento mes 2");
+    expect(installmentLabel("PAGO_TOTAL", 1)).toBe("Pago total");
+    expect(installmentLabel("SALDO_ENTREGA", 2)).toBe("Saldo al entregar (50%)");
   });
 });
 

@@ -12,5 +12,9 @@ export function installmentLabel(type: InstallmentType, sequence: number): strin
       return `Mes ${sequence}`;
     case "MANTENIMIENTO":
       return `Mantenimiento mes ${sequence}`;
+    case "PAGO_TOTAL":
+      return "Pago total";
+    case "SALDO_ENTREGA":
+      return "Saldo al entregar (50%)";
   }
 }
